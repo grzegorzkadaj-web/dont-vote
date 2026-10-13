@@ -25,28 +25,48 @@ Napisz odpowiedź po polsku. Odpowiedź ma być konkretna i bez spekulacji."""
 )
 
 
+def _resolve_source_url(metadata: dict) -> str:
+    source_urls = metadata.get("source_urls")
+    if isinstance(source_urls, list):
+        for candidate in source_urls:
+            if isinstance(candidate, str) and candidate.startswith(
+                ("http://", "https://")
+            ):
+                return candidate
+    elif isinstance(source_urls, str) and source_urls.startswith(("http://", "https://")):
+        return source_urls
+
+    for key in ("programme_url", "url", "source"):
+        candidate = metadata.get(key)
+        if not isinstance(candidate, str) or not candidate:
+            continue
+        if key == "source" and not candidate.startswith(("http://", "https://")):
+            continue
+        return candidate
+
+    return "brak-źródła"
+
+
 def format_docs_with_sources(
     docs_with_scores: list[tuple],
 ) -> tuple[str, list[SourceItem]]:
     parts: list[str] = []
     sources: list[SourceItem] = []
+    seen_source_urls: set[str] = set()
     for document, score in docs_with_scores:
-        url = (
-            document.metadata.get("source")
-            or document.metadata.get("url")
-            or document.metadata.get("programme_url")
-            or "brak-źródła"
-        )
+        url = _resolve_source_url(document.metadata)
         snippet = document.page_content.strip().replace("\n", " ")
         snippet_short = snippet[:280] + ("..." if len(snippet) > 280 else "")
         parts.append(f"[{url}] {document.page_content}")
-        sources.append(
-            SourceItem(
-                url=url,
-                score=float(score),
-                snippet=snippet_short,
+        if url not in seen_source_urls:
+            seen_source_urls.add(url)
+            sources.append(
+                SourceItem(
+                    url=url,
+                    score=float(score),
+                    snippet=snippet_short,
+                )
             )
-        )
     return "\n\n".join(parts), sources
 
 
