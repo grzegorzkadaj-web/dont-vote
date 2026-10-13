@@ -118,41 +118,53 @@ export default function HomePage() {
   };
 
   return (
-    <main>
-      <h1>Porównywarka programów partii</h1>
-      <p className="muted">
-        Zadawaj pytania o programy i porównuj odpowiedzi między partiami.
-      </p>
+    <main className="app-shell">
+      <header className="card hero">
+        <div className="brand">
+          <div className="brand-mark" aria-hidden>
+            NG
+          </div>
+          <div>
+            <p className="brand-name">Nie głosuj</p>
+            <p className="brand-tagline">Dopóki nie poznasz programu</p>
+          </div>
+        </div>
+        <h1>Porównywarka programów partii</h1>
+        <p className="muted hero-copy">
+          Zadawaj pytania o programy, porównuj stanowiska i sprawdzaj źródła zanim podejmiesz
+          decyzję.
+        </p>
+      </header>
 
-      <section className="card">
+      <section className="card section-card">
         <form onSubmit={onSubmit} className="grid">
           <label>
-            <strong>Pytanie</strong>
+            <strong>Pytanie do programów partii</strong>
             <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
           </label>
 
-          <div className="grid grid-2">
+          <div className="grid grid-2 party-selector">
             {parties.map((party) => (
-              <label key={party.key}>
+              <label key={party.key} className="party-option">
                 <input
                   type="checkbox"
                   checked={selectedParties.includes(party.key)}
                   onChange={() => toggleParty(party.key)}
-                />{" "}
-                {party.display_name}
+                />
+                <span>{party.display_name}</span>
               </label>
             ))}
           </div>
 
           <div>
-            <button type="submit" disabled={!canSubmit}>
+            <button type="submit" disabled={!canSubmit} className="primary">
               {loading ? "Analizuję..." : "Zapytaj"}
             </button>
           </div>
         </form>
       </section>
 
-      <section className="card">
+      <section className="card section-card">
         <h2>Pozycja partii (lewo ↔ prawo)</h2>
         <div className="party-map">
           <div className="axis-x" />
@@ -174,18 +186,18 @@ export default function HomePage() {
       </section>
 
       {error && (
-        <section className="card">
+        <section className="card section-card error-card">
           <strong>Błąd:</strong> {error}
         </section>
       )}
 
       {result && (
-        <section className="card">
+        <section className="card section-card">
           <h2>Odpowiedzi</h2>
           <p className="muted">{result.question}</p>
           <div className="grid">
             {result.answers.map((answer) => (
-              <article key={answer.party_key} className="card">
+              <article key={answer.party_key} className="card answer-card">
                 <h3>{answer.party_display_name}</h3>
                 <p>{answer.answer}</p>
 
@@ -201,7 +213,7 @@ export default function HomePage() {
                   ))}
                 </ul>
 
-                <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                <div className="feedback-row">
                   <span>Czy odpowiedź była pomocna?</span>
                   <button
                     type="button"

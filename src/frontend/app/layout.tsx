@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Porównywarka programów partii",
-  description: "RAG app do porównywania programów partii politycznych"
+  title: "Nie głosuj — Porównywarka programów partii",
+  description: "Dopóki nie poznasz programu. Porównuj stanowiska partii na podstawie źródeł."
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
