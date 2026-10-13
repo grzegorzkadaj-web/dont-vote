@@ -26,6 +26,15 @@ Napisz odpowiedź po polsku. Odpowiedź ma być konkretna i bez spekulacji."""
 
 
 def _resolve_source_url(metadata: dict) -> str:
+    for key in ("source", "url"):
+        candidate = metadata.get(key)
+        if isinstance(candidate, str) and candidate.startswith(("http://", "https://")):
+            return candidate
+
+    programme_url = metadata.get("programme_url")
+    if isinstance(programme_url, str) and programme_url:
+        return programme_url
+
     source_urls = metadata.get("source_urls")
     if isinstance(source_urls, list):
         for candidate in source_urls:
@@ -36,13 +45,10 @@ def _resolve_source_url(metadata: dict) -> str:
     elif isinstance(source_urls, str) and source_urls.startswith(("http://", "https://")):
         return source_urls
 
-    for key in ("programme_url", "url", "source"):
+    for key in ("source", "url"):
         candidate = metadata.get(key)
-        if not isinstance(candidate, str) or not candidate:
-            continue
-        if key == "source" and not candidate.startswith(("http://", "https://")):
-            continue
-        return candidate
+        if isinstance(candidate, str) and candidate:
+            return candidate
 
     return "brak-źródła"
 

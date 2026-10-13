@@ -81,6 +81,7 @@ uv run python feeding.py --party all --use-tavily-enrichment
 ```
 
 For website-based programmes (for example Partia Razem), Tavily extraction is required and uses `TAVILY_API_KEY`.
+In answers, the **Źródła** list uses the chunk-level page URL metadata when available (not just the programme root URL).
 
 ## Run backend
 
