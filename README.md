@@ -11,11 +11,13 @@ Programme sources:
 - Platforma Obywatelska: `https://platforma.org/upload/document/201/attachments/413/100%20konkretow-pdf.pdf`
 - Konfederacja Korony Polskiej: `https://konfederacjakoronypolskiej.pl/wp-content/uploads/2023/03/Program-KKP-internet.pdf`
 - Konfederacja: `https://konfederacja.pl/app/uploads/Konfederacja_WiN_Program_2023-1.pdf`
+- Partia Razem: `https://partiarazem.pl/deklaracja-programowa`
 
 Pinecone indices:
 - Platforma Obywatelska: `parties-po-index`
 - Konfederacja Korony Polskiej: `parties-kkp-index`
 - Konfederacja: `parties-konfederacja-index`
+- Partia Razem: `parties-razem-index`
 
 ## Project structure
 
@@ -69,6 +71,7 @@ Load a single party:
 uv run python feeding.py --party po
 uv run python feeding.py --party kkp
 uv run python feeding.py --party konfederacja
+uv run python feeding.py --party razem
 ```
 
 Optional Tavily URL enrichment:
@@ -76,6 +79,8 @@ Optional Tavily URL enrichment:
 ```bash
 uv run python feeding.py --party all --use-tavily-enrichment
 ```
+
+For website-based programmes (for example Partia Razem), Tavily extraction is required and uses `TAVILY_API_KEY`.
 
 ## Run backend
 

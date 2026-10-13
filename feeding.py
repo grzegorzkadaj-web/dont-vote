@@ -4,6 +4,7 @@ import tempfile
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Iterable
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from langchain_core.documents import Document
@@ -67,23 +68,42 @@ def _download_to_temp_file(url: str) -> str:
         return temp_file.name
 
 
-def _load_source_documents(source: str) -> list[Document]:
-    if source.startswith(("http://", "https://")):
+def _is_http_url(value: str) -> bool:
+    return value.startswith(("http://", "https://"))
+
+
+def _is_pdf_source(value: str) -> bool:
+    if _is_http_url(value):
+        parsed_path = urlparse(value).path.lower()
+        return parsed_path.endswith(".pdf")
+    return value.lower().endswith(".pdf")
+
+
+def _load_pdf_documents(source: str) -> list[Document]:
+    if _is_http_url(source):
         temp_path = _download_to_temp_file(source)
-        try:
-            loader = UnstructuredLoader(
-                file_path=[temp_path],
-                chunking_strategy="basic",
-                max_characters=1_000_000,
-                languages=["pol"],
-            )
-            return loader.load()
-        finally:
+    else:
+        temp_path = source
+
+    try:
+        loader = UnstructuredLoader(
+            file_path=[temp_path],
+            chunking_strategy="basic",
+            max_characters=1_000_000,
+            languages=["pol"],
+        )
+        return loader.load()
+    finally:
+        if _is_http_url(source):
             try:
                 os.remove(temp_path)
             except OSError:
                 pass
 
+
+def _load_source_documents(source: str) -> list[Document]:
+    if _is_pdf_source(source):
+        return _load_pdf_documents(source)
     loader = UnstructuredLoader(
         file_path=[source],
         chunking_strategy="basic",
@@ -102,10 +122,24 @@ def build_documents_for_party(
         f"Loading programme for {party_config.display_name}: {party_config.programme_url}"
     )
 
-    documents = _load_source_documents(party_config.programme_url)
-
     source_urls: set[str] = {party_config.programme_url}
-    if use_tavily_enrichment:
+    is_web_programme = _is_http_url(party_config.programme_url) and not _is_pdf_source(
+        party_config.programme_url
+    )
+
+    if is_web_programme:
+        enricher = TavilyEnricher()
+        discovered_urls = enricher.discover_related_urls(party_config.programme_url)
+        source_urls.update(discovered_urls)
+        documents = enricher.extract_documents_from_urls(sorted(source_urls))
+        if not documents:
+            raise RuntimeError(
+                f"No textual content extracted from website programme: {party_config.programme_url}"
+            )
+    else:
+        documents = _load_source_documents(party_config.programme_url)
+
+    if use_tavily_enrichment and not is_web_programme:
         enricher = TavilyEnricher()
         mapped_urls = enricher.discover_related_urls(party_config.programme_url)
         source_urls.update(mapped_urls)
@@ -181,6 +215,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _requires_tavily_for_party(party: PartyKey) -> bool:
+    programme_url = PARTY_CONFIGS[party].programme_url
+    return _is_http_url(programme_url) and not _is_pdf_source(programme_url)
+
+
 if __name__ == "__main__":
     args = parse_args()
     selected: list[PartyKey]
@@ -190,6 +229,15 @@ if __name__ == "__main__":
         selected = [args.party]
 
     log_header("Starting ingestion to Pinecone")
+    if any(
+        _requires_tavily_for_party(party_key) for party_key in selected
+    ) and not os.getenv("TAVILY_API_KEY"):
+        log_error(
+            "TAVILY_API_KEY is required for website-based programme ingestion. "
+            "Set it in .env and retry."
+        )
+        raise RuntimeError("Missing TAVILY_API_KEY for website programme ingestion.")
+
     if args.use_tavily_enrichment and not os.getenv("TAVILY_API_KEY"):
         log_warning(
             "TAVILY_API_KEY is missing. Tavily enrichment is disabled for this run."
