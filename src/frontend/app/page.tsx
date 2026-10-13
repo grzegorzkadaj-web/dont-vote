@@ -166,7 +166,15 @@ export default function HomePage() {
 
       <section className="card section-card">
         <h2>Pozycja partii (lewo ↔ prawo)</h2>
+        <p className="muted axis-legend">
+          Oś X: poglądy gospodarczo-społeczne (lewo → prawo). Oś Y: poglądy światopoglądowe
+          (progresywne → konserwatywne).
+        </p>
         <div className="party-map">
+          <span className="axis-label axis-label-x-left">Lewica gospodarcza</span>
+          <span className="axis-label axis-label-x-right">Prawica gospodarcza</span>
+          <span className="axis-label axis-label-y-top">Konserwatyzm światopoglądowy</span>
+          <span className="axis-label axis-label-y-bottom">Progresywność światopoglądowa</span>
           <div className="axis-x" />
           <div className="axis-y" />
           {parties.map((party) => (
