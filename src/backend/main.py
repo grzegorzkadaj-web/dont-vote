@@ -11,10 +11,16 @@ from src.backend.parties import PARTY_CONFIGS
 from src.backend.rag import RAGService
 from src.backend.schemas import AskRequest, AskResponse, FeedbackRequest, PartyOverview
 
+allowed_frontend_origins = [
+    origin.strip().rstrip("/")
+    for origin in settings.frontend_origin.split(",")
+    if origin.strip()
+]
+
 app = FastAPI(title="Polityczny RAG API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
+    allow_origins=allowed_frontend_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

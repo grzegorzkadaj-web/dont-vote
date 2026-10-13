@@ -40,6 +40,7 @@ TAVILY_API_KEY=... # optional, only for --use-tavily-enrichment
 ```
 
 `NEXT_PUBLIC_BACKEND_URL` can be set with or without a trailing slash.
+`FRONTEND_ORIGIN` accepts one origin or a comma-separated list (for example local + Railway frontend), and each value can be set with or without a trailing slash.
 
 ## Installation
 
