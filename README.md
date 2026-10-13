@@ -12,12 +12,14 @@ Programme sources:
 - Konfederacja Korony Polskiej: `https://konfederacjakoronypolskiej.pl/wp-content/uploads/2023/03/Program-KKP-internet.pdf`
 - Konfederacja: `https://konfederacja.pl/app/uploads/Konfederacja_WiN_Program_2023-1.pdf`
 - Partia Razem: `https://partiarazem.pl/deklaracja-programowa`
+- Polskie Stronnictwo Ludowe: `https://www.psl.pl/wp-content/uploads/2023/09/Program-PSL.pdf`
 
 Pinecone indices:
 - Platforma Obywatelska: `parties-po-index`
 - Konfederacja Korony Polskiej: `parties-kkp-index`
 - Konfederacja: `parties-konfederacja-index`
 - Partia Razem: `parties-razem-index`
+- Polskie Stronnictwo Ludowe: `parties-psl-index`
 
 ## Project structure
 
@@ -72,6 +74,7 @@ uv run python feeding.py --party po
 uv run python feeding.py --party kkp
 uv run python feeding.py --party konfederacja
 uv run python feeding.py --party razem
+uv run python feeding.py --party psl
 ```
 
 Optional Tavily URL enrichment:

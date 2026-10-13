@@ -1,4 +1,6 @@
 import argparse
+import base64
+import io
 import os
 import tempfile
 import urllib.request
@@ -8,10 +10,13 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
+from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_unstructured import UnstructuredLoader
+from pypdf import PdfReader
+from pypdfium2 import PdfDocument
 
 from logger import log_error, log_header, log_info, log_success, log_warning
 from src.backend.parties import PARTY_CONFIGS, PartyKey
@@ -86,19 +91,145 @@ def _load_pdf_documents(source: str) -> list[Document]:
         temp_path = source
 
     try:
-        loader = UnstructuredLoader(
-            file_path=[temp_path],
-            chunking_strategy="basic",
-            max_characters=1_000_000,
-            languages=["pol"],
-        )
-        return loader.load()
+        try:
+            loader = UnstructuredLoader(
+                file_path=[temp_path],
+                chunking_strategy="basic",
+                max_characters=1_000_000,
+                languages=["pol"],
+                strategy="fast",
+            )
+            documents = loader.load()
+            if documents:
+                return documents
+            log_warning(
+                "Unstructured PDF extraction returned no content. Falling back to pypdf."
+            )
+        except Exception as exc:
+            log_warning(
+                f"Unstructured PDF extraction failed ({exc}). Falling back to pypdf."
+            )
+
+        try:
+            return _load_pdf_documents_with_pypdf(file_path=temp_path, source=source)
+        except Exception as exc:
+            log_warning(
+                f"pypdf extraction failed ({exc}). Falling back to OpenAI OCR via pypdfium2."
+            )
+
+        return _load_pdf_documents_with_openai_ocr(file_path=temp_path, source=source)
     finally:
         if _is_http_url(source):
             try:
                 os.remove(temp_path)
             except OSError:
                 pass
+
+
+def _load_pdf_documents_with_pypdf(file_path: str, source: str) -> list[Document]:
+    reader = PdfReader(file_path)
+    documents: list[Document] = []
+    for page_number, page in enumerate(reader.pages, start=1):
+        text = (page.extract_text() or "").strip()
+        if not text:
+            continue
+        documents.append(
+            Document(
+                page_content=text,
+                metadata={
+                    "source": source,
+                    "url": source,
+                    "page_number": page_number,
+                    "filetype": "application/pdf",
+                },
+            )
+        )
+
+    if not documents:
+        raise RuntimeError("No textual content extracted from PDF with pypdf.")
+
+    return documents
+
+
+def _extract_text_from_chat_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        text_parts: list[str] = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                text = part.get("text")
+                if isinstance(text, str) and text.strip():
+                    text_parts.append(text.strip())
+        return "\n".join(text_parts).strip()
+    return str(content).strip()
+
+
+def _load_pdf_documents_with_openai_ocr(file_path: str, source: str) -> list[Document]:
+    ocr_model = (
+        os.environ.get("OCR_MODEL") or os.environ.get("CHAT_MODEL") or "gpt-4o-mini"
+    )
+    llm = ChatOpenAI(model=ocr_model, temperature=0)
+    pdf = PdfDocument(file_path)
+    documents: list[Document] = []
+
+    try:
+        for page_number in range(len(pdf)):
+            page = pdf[page_number]
+            rendered = page.render(scale=2.0)
+            image = rendered.to_pil()
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=75, optimize=True)
+            encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+
+            response = llm.invoke(
+                [
+                    HumanMessage(
+                        content=[
+                            {
+                                "type": "text",
+                                "text": (
+                                    "Extract all visible text from this Polish political programme page. "
+                                    "Return only plain text transcription. "
+                                    "If there is no readable text, return an empty string."
+                                ),
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{encoded}",
+                                },
+                            },
+                        ]
+                    )
+                ]
+            )
+            text = _extract_text_from_chat_content(response.content)
+            if not text:
+                continue
+
+            documents.append(
+                Document(
+                    page_content=text,
+                    metadata={
+                        "source": source,
+                        "url": source,
+                        "page_number": page_number + 1,
+                        "filetype": "application/pdf",
+                        "extraction_method": f"openai_ocr:{ocr_model}",
+                    },
+                )
+            )
+    finally:
+        pdf.close()
+
+    if not documents:
+        raise RuntimeError("No textual content extracted from PDF with OpenAI OCR.")
+
+    log_info(
+        f"OpenAI OCR extracted text from {len(documents)} page(s) using model '{ocr_model}'."
+    )
+    return documents
 
 
 def _load_source_documents(source: str) -> list[Document]:

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-PartyKey = Literal["po", "kkp", "konfederacja", "razem"]
+PartyKey = Literal["po", "kkp", "konfederacja", "razem", "psl"]
 
 
 @dataclass(frozen=True)
@@ -51,5 +51,14 @@ PARTY_CONFIGS: dict[PartyKey, PartyConfig] = {
         axis_x=-0.8,
         axis_y=-0.2,
         axis_label="socjaldemokratyczna",
+    ),
+    "psl": PartyConfig(
+        key="psl",
+        display_name="Polskie Stronnictwo Ludowe",
+        index_name="parties-psl-index",
+        programme_url="https://www.psl.pl/wp-content/uploads/2023/09/Program-PSL.pdf",
+        axis_x=0.0,
+        axis_y=0.0,
+        axis_label="ludowo-centrowa",
     ),
 }

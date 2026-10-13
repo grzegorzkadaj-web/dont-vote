@@ -15,7 +15,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--parties",
         nargs="*",
-        help="Optional party keys (e.g. po konfederacja). Defaults to all parties.",
+        help="Optional party keys (e.g. po psl). Defaults to all parties.",
     )
     return parser.parse_args()
 
