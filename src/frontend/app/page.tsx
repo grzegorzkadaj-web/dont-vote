@@ -32,6 +32,9 @@ type AskResponse = {
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
+const buildApiUrl = (path: string): string =>
+  `${backendUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+
 export default function HomePage() {
   const [question, setQuestion] = useState("Co partie mówią o ochronie zdrowia?");
   const [parties, setParties] = useState<PartyOverview[]>([]);
@@ -42,7 +45,7 @@ export default function HomePage() {
   const [feedbackState, setFeedbackState] = useState<Record<string, "saved" | undefined>>({});
 
   useEffect(() => {
-    void fetch(`${backendUrl}/api/parties`)
+    void fetch(buildApiUrl("/api/parties"))
       .then((res) => {
         if (!res.ok) {
           throw new Error("Nie udało się pobrać listy partii.");
@@ -70,7 +73,7 @@ export default function HomePage() {
     setFeedbackState({});
 
     try {
-      const response = await fetch(`${backendUrl}/api/ask`, {
+      const response = await fetch(buildApiUrl("/api/ask"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -102,7 +105,7 @@ export default function HomePage() {
   };
 
   const sendFeedback = async (partyKey: string, helpful: boolean) => {
-    await fetch(`${backendUrl}/api/feedback`, {
+    await fetch(buildApiUrl("/api/feedback"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

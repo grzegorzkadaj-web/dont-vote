@@ -39,6 +39,8 @@ NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 TAVILY_API_KEY=... # optional, only for --use-tavily-enrichment
 ```
 
+`NEXT_PUBLIC_BACKEND_URL` can be set with or without a trailing slash.
+
 ## Installation
 
 Python:
