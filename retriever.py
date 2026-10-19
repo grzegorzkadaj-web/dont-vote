@@ -5,7 +5,7 @@ from src.backend.rag import RAGService
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Query party programmes stored in Pinecone and print answers."
+        description="Query party programmes stored in Chroma and print answers."
     )
     parser.add_argument(
         "--question",

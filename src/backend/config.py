@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
     feedback_store_path: str = "src/backend/feedback.jsonl"
+    chroma_persist_directory: str = ".chroma"
 
 
 settings = Settings()

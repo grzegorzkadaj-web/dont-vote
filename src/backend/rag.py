@@ -1,10 +1,10 @@
 from operator import itemgetter
 
+from langchain_chroma import Chroma
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_pinecone import PineconeVectorStore
 
 from src.backend.config import settings
 from src.backend.parties import PARTY_CONFIGS
@@ -82,9 +82,10 @@ class RAGService:
         self.llm = ChatOpenAI(model=settings.chat_model)
 
         self.vectorstores = {
-            party_key: PineconeVectorStore(
-                index_name=config.index_name,
-                embedding=self.embeddings,
+            party_key: Chroma(
+                collection_name=config.index_name,
+                embedding_function=self.embeddings,
+                persist_directory=settings.chroma_persist_directory,
             )
             for party_key, config in PARTY_CONFIGS.items()
         }

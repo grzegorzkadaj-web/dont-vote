@@ -11,8 +11,8 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
+from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_pinecone import PineconeVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_unstructured import UnstructuredLoader
 from pypdf import PdfReader
@@ -29,8 +29,6 @@ load_dotenv()
 class IngestionConfig:
     chunk_size: int = 1_000
     chunk_overlap: int = 200
-    pinecone_batch_size: int = 8
-    pinecone_embedding_chunk_size: int = 8
 
 
 def _sanitize_metadata(raw_metadata: dict[str, Any]) -> dict[str, Any]:
@@ -235,12 +233,20 @@ def _load_pdf_documents_with_openai_ocr(file_path: str, source: str) -> list[Doc
 def _load_source_documents(source: str) -> list[Document]:
     if _is_pdf_source(source):
         return _load_pdf_documents(source)
-    loader = UnstructuredLoader(
-        file_path=[source],
-        chunking_strategy="basic",
-        max_characters=1_000_000,
-        languages=["pol"],
-    )
+    if _is_http_url(source):
+        loader = UnstructuredLoader(
+            web_url=source,
+            chunking_strategy="basic",
+            max_characters=1_000_000,
+            languages=["pol"],
+        )
+    else:
+        loader = UnstructuredLoader(
+            file_path=[source],
+            chunking_strategy="basic",
+            max_characters=1_000_000,
+            languages=["pol"],
+        )
     return loader.load()
 
 
@@ -254,26 +260,17 @@ def build_documents_for_party(
     )
 
     source_urls: set[str] = {party_config.programme_url}
-    is_web_programme = _is_http_url(party_config.programme_url) and not _is_pdf_source(
-        party_config.programme_url
-    )
+    documents = _load_source_documents(party_config.programme_url)
 
-    if is_web_programme:
+    if use_tavily_enrichment:
         enricher = TavilyEnricher()
         discovered_urls = enricher.discover_related_urls(party_config.programme_url)
         source_urls.update(discovered_urls)
-        documents = enricher.extract_documents_from_urls(sorted(source_urls))
-        if not documents:
-            raise RuntimeError(
-                f"No textual content extracted from website programme: {party_config.programme_url}"
-            )
-    else:
-        documents = _load_source_documents(party_config.programme_url)
-
-    if use_tavily_enrichment and not is_web_programme:
-        enricher = TavilyEnricher()
-        mapped_urls = enricher.discover_related_urls(party_config.programme_url)
-        source_urls.update(mapped_urls)
+        enriched_documents = enricher.extract_documents_from_urls(
+            sorted(discovered_urls)
+        )
+        if enriched_documents:
+            documents.extend(enriched_documents)
 
     base_metadata = {
         "party": party,
@@ -314,23 +311,22 @@ def ingest_party(party: PartyKey, use_tavily_enrichment: bool) -> None:
         retry_min_seconds=10,
     )
 
-    vector_store = PineconeVectorStore(
-        index_name=party_config.index_name,
-        embedding=embeddings,
+    persist_directory = os.environ.get("CHROMA_PERSIST_DIRECTORY", ".chroma")
+    vector_store = Chroma(
+        collection_name=party_config.index_name,
+        embedding_function=embeddings,
+        persist_directory=persist_directory,
     )
-    vector_store.add_documents(
-        documents=split_docs,
-        batch_size=ingestion_config.pinecone_batch_size,
-        embedding_chunk_size=ingestion_config.pinecone_embedding_chunk_size,
-    )
+    vector_store.add_documents(documents=split_docs)
     log_success(
-        f"Upserted {len(split_docs)} chunks into Pinecone index '{party_config.index_name}'."
+        f"Upserted {len(split_docs)} chunks into Chroma collection "
+        f"'{party_config.index_name}' (persist_directory='{persist_directory}')."
     )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Load Polish political parties programmes and upsert them to Pinecone."
+        description="Load Polish political parties programmes and upsert them to Chroma."
     )
     parser.add_argument(
         "--party",
@@ -346,11 +342,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _requires_tavily_for_party(party: PartyKey) -> bool:
-    programme_url = PARTY_CONFIGS[party].programme_url
-    return _is_http_url(programme_url) and not _is_pdf_source(programme_url)
-
-
 if __name__ == "__main__":
     args = parse_args()
     selected: list[PartyKey]
@@ -359,16 +350,7 @@ if __name__ == "__main__":
     else:
         selected = [args.party]
 
-    log_header("Starting ingestion to Pinecone")
-    if any(
-        _requires_tavily_for_party(party_key) for party_key in selected
-    ) and not os.getenv("TAVILY_API_KEY"):
-        log_error(
-            "TAVILY_API_KEY is required for website-based programme ingestion. "
-            "Set it in .env and retry."
-        )
-        raise RuntimeError("Missing TAVILY_API_KEY for website programme ingestion.")
-
+    log_header("Starting ingestion to Chroma")
     if args.use_tavily_enrichment and not os.getenv("TAVILY_API_KEY"):
         log_warning(
             "TAVILY_API_KEY is missing. Tavily enrichment is disabled for this run."
