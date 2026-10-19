@@ -143,6 +143,42 @@ p {
   background: #f1f5ff;
 }
 
+.poll-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.poll-question {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  padding: 10px 12px;
+  margin: 0;
+}
+
+.poll-question legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.poll-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.poll-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.poll-summary {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
 textarea {
   width: 100%;
   min-height: 112px;
@@ -261,6 +297,12 @@ button:disabled {
   padding: 4px 8px;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.user-dot {
+  background: #1d4ed8;
+  border: 2px solid #bfdbfe;
+  font-weight: 700;
 }
 
 .position-justifications {

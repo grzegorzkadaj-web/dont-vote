@@ -31,10 +31,80 @@ type AskResponse = {
   answers: PartyAnswer[];
 };
 
+type PollAxis = "x" | "y";
+
+type PollQuestion = {
+  id: string;
+  text: string;
+  axis: PollAxis;
+  weight: number;
+  polarity: 1 | -1;
+};
+
+type PollOption = {
+  value: number;
+  label: string;
+};
+
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
 const buildApiUrl = (path: string): string =>
   `${backendUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+
+const clampAxisValue = (value: number): number => Math.max(-1, Math.min(1, value));
+
+const pollQuestions: PollQuestion[] = [
+  {
+    id: "social-spending",
+    text: "Państwo powinno zwiększać wydatki socjalne, nawet jeśli oznacza to wyższe podatki.",
+    axis: "x",
+    weight: 1,
+    polarity: -1
+  },
+  {
+    id: "free-market",
+    text: "Wolny rynek i niższe podatki są ważniejsze niż rozbudowane usługi publiczne.",
+    axis: "x",
+    weight: 1,
+    polarity: 1
+  },
+  {
+    id: "workers-rights",
+    text: "Państwo powinno mocniej regulować rynek pracy i wzmacniać prawa pracowników.",
+    axis: "x",
+    weight: 1,
+    polarity: -1
+  },
+  {
+    id: "tradition",
+    text: "Tradycyjne wartości rodzinne powinny mieć pierwszeństwo w polityce publicznej.",
+    axis: "y",
+    weight: 1,
+    polarity: 1
+  },
+  {
+    id: "liberal-rights",
+    text: "Państwo powinno rozszerzać prawa obyczajowe (np. związki partnerskie, dostęp do aborcji).",
+    axis: "y",
+    weight: 1,
+    polarity: -1
+  },
+  {
+    id: "religion",
+    text: "Religia powinna odgrywać ważną rolę w decyzjach władz publicznych.",
+    axis: "y",
+    weight: 1,
+    polarity: 1
+  }
+];
+
+const pollOptions: PollOption[] = [
+  { value: -2, label: "Zdecydowanie się nie zgadzam" },
+  { value: -1, label: "Raczej się nie zgadzam" },
+  { value: 0, label: "Neutralnie" },
+  { value: 1, label: "Raczej się zgadzam" },
+  { value: 2, label: "Zdecydowanie się zgadzam" }
+];
 
 export default function HomePage() {
   const [question, setQuestion] = useState("Co partie mówią o ochronie zdrowia?");
@@ -44,6 +114,7 @@ export default function HomePage() {
   const [result, setResult] = useState<AskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedbackState, setFeedbackState] = useState<Record<string, "saved" | undefined>>({});
+  const [pollAnswers, setPollAnswers] = useState<Record<string, number>>({});
 
   useEffect(() => {
     void fetch(buildApiUrl("/api/parties"))
@@ -66,6 +137,61 @@ export default function HomePage() {
     () => question.trim().length >= 5 && selectedParties.length > 0 && !loading,
     [loading, question, selectedParties.length]
   );
+
+  const pollPosition = useMemo(() => {
+    if (Object.keys(pollAnswers).length !== pollQuestions.length) {
+      return null;
+    }
+
+    let sumX = 0;
+    let sumY = 0;
+    let weightX = 0;
+    let weightY = 0;
+
+    for (const questionItem of pollQuestions) {
+      const answer = pollAnswers[questionItem.id];
+      if (typeof answer !== "number") {
+        return null;
+      }
+      const normalizedAnswer = answer / 2;
+      const weightedContribution =
+        normalizedAnswer * questionItem.weight * questionItem.polarity;
+      if (questionItem.axis === "x") {
+        sumX += weightedContribution;
+        weightX += questionItem.weight;
+      } else {
+        sumY += weightedContribution;
+        weightY += questionItem.weight;
+      }
+    }
+
+    return {
+      axis_x: clampAxisValue(weightX > 0 ? sumX / weightX : 0),
+      axis_y: clampAxisValue(weightY > 0 ? sumY / weightY : 0)
+    };
+  }, [pollAnswers]);
+
+  const pollMatches = useMemo(() => {
+    if (!pollPosition) {
+      return [];
+    }
+
+    const maxDistance = Math.sqrt(8);
+    return [...parties]
+      .map((party) => {
+        const distance = Math.hypot(
+          pollPosition.axis_x - party.axis_x,
+          pollPosition.axis_y - party.axis_y
+        );
+        const similarity = Math.max(0, 1 - distance / maxDistance);
+        return {
+          ...party,
+          similarity
+        };
+      })
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 3);
+  }, [parties, pollPosition]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -118,6 +244,10 @@ export default function HomePage() {
     setFeedbackState((previous) => ({ ...previous, [partyKey]: "saved" }));
   };
 
+  const onPollAnswerChange = (questionId: string, value: number) => {
+    setPollAnswers((previous) => ({ ...previous, [questionId]: value }));
+  };
+
   return (
     <main className="app-shell">
       <header className="card hero">
@@ -136,6 +266,57 @@ export default function HomePage() {
           decyzję.
         </p>
       </header>
+
+      <section className="card section-card">
+        <h2>Krótka ankieta poglądów</h2>
+        <p className="muted">
+          Odpowiedz na kilka pytań, a obliczymy Twoją pozycję na osi politycznej i porównamy ją z
+          partiami.
+        </p>
+        <div className="poll-grid">
+          {pollQuestions.map((questionItem, index) => (
+            <fieldset key={questionItem.id} className="poll-question">
+              <legend>
+                {index + 1}. {questionItem.text}
+              </legend>
+              <div className="poll-options">
+                {pollOptions.map((option) => (
+                  <label key={`${questionItem.id}-${option.value}`} className="poll-option">
+                    <input
+                      type="radio"
+                      name={questionItem.id}
+                      checked={pollAnswers[questionItem.id] === option.value}
+                      onChange={() => onPollAnswerChange(questionItem.id, option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ))}
+        </div>
+
+        {pollPosition ? (
+          <div className="poll-summary">
+            <p>
+              <strong>Twoja pozycja:</strong> X={pollPosition.axis_x.toFixed(2)}, Y=
+              {pollPosition.axis_y.toFixed(2)}
+            </p>
+            <p className="muted">
+              Najbliżej Ci do:{" "}
+              {pollMatches.map((party, index) => (
+                <span key={party.key}>
+                  {index > 0 ? ", " : ""}
+                  {party.display_name} ({Math.round(party.similarity * 100)}%)
+                </span>
+              ))}
+              .
+            </p>
+          </div>
+        ) : (
+          <p className="muted">Wypełnij wszystkie pytania, aby zobaczyć wynik.</p>
+        )}
+      </section>
 
       <section className="card section-card">
         <h2>Pozycja partii na scenie politycznej</h2>
@@ -163,6 +344,18 @@ export default function HomePage() {
               {party.display_name}
             </span>
           ))}
+          {pollPosition && (
+            <span
+              className="party-dot user-dot"
+              style={{
+                left: `${(pollPosition.axis_x + 1) * 50}%`,
+                top: `${(1 - (pollPosition.axis_y + 1) * 0.5) * 100}%`
+              }}
+              title="Twoja pozycja z ankiety"
+            >
+              Ty
+            </span>
+          )}
         </div>
         <div className="position-justifications">
           {parties.map((party) => (
