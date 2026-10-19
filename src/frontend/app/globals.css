@@ -263,6 +263,28 @@ button:disabled {
   white-space: nowrap;
 }
 
+.position-justifications {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.justification-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.justification-item h3 {
+  margin: 0 0 6px;
+  font-size: 0.98rem;
+}
+
+.justification-item p {
+  margin: 0;
+}
+
 .sources {
   margin: 6px 0 0;
   padding-left: 16px;

@@ -57,6 +57,10 @@ def get_parties() -> list[PartyOverview]:
                     "axis_label", config.axis_label
                 )
             ),
+            axis_justification=str(
+                calculated_positions.get(config.key, {}).get("justification", "")
+            )
+            or None,
         )
         for config in PARTY_CONFIGS.values()
     ]

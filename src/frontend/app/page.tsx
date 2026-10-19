@@ -10,6 +10,7 @@ type PartyOverview = {
   axis_x: number;
   axis_y: number;
   axis_label: string;
+  axis_justification: string | null;
 };
 
 type SourceItem = {
@@ -161,6 +162,17 @@ export default function HomePage() {
             >
               {party.display_name}
             </span>
+          ))}
+        </div>
+        <div className="position-justifications">
+          {parties.map((party) => (
+            <article key={`justification-${party.key}`} className="justification-item">
+              <h3>{party.display_name}</h3>
+              <p className="muted">
+                <strong>{party.axis_label}:</strong>{" "}
+                {party.axis_justification ?? "Uzasadnienie pozycji nie jest jeszcze dostępne."}
+              </p>
+            </article>
           ))}
         </div>
       </section>

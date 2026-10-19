@@ -98,6 +98,7 @@ def load_calculated_positions(
         axis_x = raw.get("axis_x")
         axis_y = raw.get("axis_y")
         axis_label = raw.get("axis_label")
+        justification = raw.get("justification")
         if not isinstance(axis_x, (int, float)):
             continue
         if not isinstance(axis_y, (int, float)):
@@ -109,6 +110,9 @@ def load_calculated_positions(
             "axis_x": max(-1.0, min(1.0, float(axis_x))),
             "axis_y": max(-1.0, min(1.0, float(axis_y))),
             "axis_label": axis_label.strip(),
+            "justification": (
+                justification.strip() if isinstance(justification, str) else ""
+            ),
         }
 
     return positions

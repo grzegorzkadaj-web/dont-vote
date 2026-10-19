@@ -32,6 +32,7 @@ class PartyOverview(BaseModel):
     axis_x: float
     axis_y: float
     axis_label: str
+    axis_justification: str | None = None
 
 
 class FeedbackRequest(BaseModel):
