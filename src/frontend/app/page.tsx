@@ -136,35 +136,7 @@ export default function HomePage() {
         </p>
       </header>
 
-      <section className="card section-card">
-        <form onSubmit={onSubmit} className="grid">
-          <label>
-            <strong>Pytanie do programów partii</strong>
-            <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
-          </label>
-
-          <div className="grid grid-2 party-selector">
-            {parties.map((party) => (
-              <label key={party.key} className="party-option">
-                <input
-                  type="checkbox"
-                  checked={selectedParties.includes(party.key)}
-                  onChange={() => toggleParty(party.key)}
-                />
-                <span>{party.display_name}</span>
-              </label>
-            ))}
-          </div>
-
-          <div>
-            <button type="submit" disabled={!canSubmit} className="primary">
-              {loading ? "Analizuję..." : "Zapytaj"}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <section className="card section-card">
+<section className="card section-card">
         <h2>Pozycja partii (lewo ↔ prawo)</h2>
         <p className="muted axis-legend">
           Oś X: poglądy gospodarczo-społeczne (lewo → prawo). Oś Y: poglądy światopoglądowe
@@ -191,6 +163,34 @@ export default function HomePage() {
             </span>
           ))}
         </div>
+      </section>
+
+      <section className="card section-card">
+        <form onSubmit={onSubmit} className="grid">
+          <label>
+            <strong>Pytanie do programów partii</strong>
+            <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
+          </label>
+
+          <div className="grid grid-2 party-selector">
+            {parties.map((party) => (
+              <label key={party.key} className="party-option">
+                <input
+                  type="checkbox"
+                  checked={selectedParties.includes(party.key)}
+                  onChange={() => toggleParty(party.key)}
+                />
+                <span>{party.display_name}</span>
+              </label>
+            ))}
+          </div>
+
+          <div>
+            <button type="submit" disabled={!canSubmit} className="primary">
+              {loading ? "Analizuję..." : "Zapytaj"}
+            </button>
+          </div>
+        </form>
       </section>
 
       {error && (
