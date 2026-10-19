@@ -1,4 +1,6 @@
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 PartyKey = Literal["po", "kkp", "konfederacja", "razem", "psl", "pis"]
@@ -71,3 +73,42 @@ PARTY_CONFIGS: dict[PartyKey, PartyConfig] = {
         axis_label="narodowo-konserwatywna",
     ),
 }
+
+
+def load_calculated_positions(
+    path: str | Path,
+) -> dict[PartyKey, dict[str, float | str]]:
+    file_path = Path(path)
+    if not file_path.exists():
+        return {}
+
+    with file_path.open(encoding="utf-8") as file:
+        payload = json.load(file)
+
+    parties_payload = payload.get("parties")
+    if not isinstance(parties_payload, dict):
+        return {}
+
+    positions: dict[PartyKey, dict[str, float | str]] = {}
+    for key in PARTY_CONFIGS:
+        raw = parties_payload.get(key)
+        if not isinstance(raw, dict):
+            continue
+
+        axis_x = raw.get("axis_x")
+        axis_y = raw.get("axis_y")
+        axis_label = raw.get("axis_label")
+        if not isinstance(axis_x, (int, float)):
+            continue
+        if not isinstance(axis_y, (int, float)):
+            continue
+        if not isinstance(axis_label, str) or not axis_label.strip():
+            continue
+
+        positions[key] = {
+            "axis_x": max(-1.0, min(1.0, float(axis_x))),
+            "axis_y": max(-1.0, min(1.0, float(axis_y))),
+            "axis_label": axis_label.strip(),
+        }
+
+    return positions

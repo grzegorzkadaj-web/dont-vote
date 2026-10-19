@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-10-19T17:49:23.832835+00:00",
+  "model": "gpt-4o-mini",
+  "embeddings_model": "text-embedding-3-small",
+  "retrieval_k": 12,
+  "parties": {
+    "po": {
+      "axis_x": -0.3,
+      "axis_y": -0.6,
+      "axis_label": "lewicowo-progresywna",
+      "justification": "Partia proponuje szereg rozwiązań społecznych i zdrowotnych, a także liberalizację przepisów dotyczących aborcji, co wskazuje na lewicowe i progresywne podejście.",
+      "source_urls": [
+        "C:\\Users\\akid\\AppData\\Local\\Temp\\tmp60xkvqxc.pdf"
+      ]
+    },
+    "kkp": {
+      "axis_x": 0.8,
+      "axis_y": 0.7,
+      "axis_label": "prawicowo-konserwatywna",
+      "justification": "Program partii kładzie duży nacisk na wolność gospodarczą, przedsiębiorczość oraz tradycyjne wartości rodzinne i narodowe.",
+      "source_urls": [
+        "C:\\Users\\akid\\AppData\\Local\\Temp\\tmp3lq98irv.pdf"
+      ]
+    },
+    "konfederacja": {
+      "axis_x": 0.8,
+      "axis_y": 0.5,
+      "axis_label": "prawicowo-konserwatywna",
+      "justification": "Partia promuje niskie podatki i ograniczenie biurokracji, co wskazuje na prawicowe podejście gospodarcze, a także konserwatywne wartości w kwestiach społecznych.",
+      "source_urls": [
+        "C:\\Users\\akid\\AppData\\Local\\Temp\\tmprvwplib0.pdf"
+      ]
+    },
+    "razem": {
+      "axis_x": -0.7,
+      "axis_y": -0.6,
+      "axis_label": "lewicowo-progresywna",
+      "justification": "Partia kładzie duży nacisk na sprawiedliwość społeczną i odpowiedzialność państwa, co wskazuje na lewicowe podejście, a także promuje nowoczesne i progresywne rozwiązania w gospodarce i społeczeństwie.",
+      "source_urls": [
+        "https://partiarazem.pl/deklaracja-programowa"
+      ]
+    },
+    "psl": {
+      "axis_x": -0.2,
+      "axis_y": -0.3,
+      "axis_label": "centrowo-progresywna",
+      "justification": "Partia promuje wsparcie dla osób z niepełnosprawnościami oraz politykę prorodzinną, co wskazuje na lewicowe i progresywne podejście społeczne.",
+      "source_urls": [
+        "https://www.psl.pl/wp-content/uploads/2023/09/Program-PSL.pdf"
+      ]
+    },
+    "pis": {
+      "axis_x": -0.2,
+      "axis_y": 0.5,
+      "axis_label": "centrowo-konserwatywna",
+      "justification": "Partia kładzie nacisk na wartości tradycyjne i suwerenność, co wskazuje na konserwatyzm, ale jednocześnie promuje solidarność i sprawiedliwość społeczną, co przesuwa ją w stronę centrum.",
+      "source_urls": [
+        "https://bip.pis.org.pl/program-partii"
+      ]
+    }
+  }
+}

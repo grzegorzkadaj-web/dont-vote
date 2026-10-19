@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.backend.config import settings
-from src.backend.parties import PARTY_CONFIGS
+from src.backend.parties import PARTY_CONFIGS, load_calculated_positions
 from src.backend.rag import RAGService
 from src.backend.schemas import AskRequest, AskResponse, FeedbackRequest, PartyOverview
 
@@ -39,15 +39,24 @@ def health() -> dict[str, str]:
 
 @app.get("/api/parties", response_model=list[PartyOverview])
 def get_parties() -> list[PartyOverview]:
+    calculated_positions = load_calculated_positions(settings.party_positions_path)
     return [
         PartyOverview(
             key=config.key,
             display_name=config.display_name,
             index_name=config.index_name,
             programme_url=config.programme_url,
-            axis_x=config.axis_x,
-            axis_y=config.axis_y,
-            axis_label=config.axis_label,
+            axis_x=float(
+                calculated_positions.get(config.key, {}).get("axis_x", config.axis_x)
+            ),
+            axis_y=float(
+                calculated_positions.get(config.key, {}).get("axis_y", config.axis_y)
+            ),
+            axis_label=str(
+                calculated_positions.get(config.key, {}).get(
+                    "axis_label", config.axis_label
+                )
+            ),
         )
         for config in PARTY_CONFIGS.values()
     ]
