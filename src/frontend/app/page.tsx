@@ -46,6 +46,8 @@ type PollOption = {
   label: string;
 };
 
+type TabKey = "position" | "question" | "poll";
+
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
 const buildApiUrl = (path: string): string =>
@@ -115,6 +117,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [feedbackState, setFeedbackState] = useState<Record<string, "saved" | undefined>>({});
   const [pollAnswers, setPollAnswers] = useState<Record<string, number>>({});
+  const [activeTab, setActiveTab] = useState<TabKey>("position");
 
   useEffect(() => {
     void fetch(buildApiUrl("/api/parties"))
@@ -248,6 +251,48 @@ export default function HomePage() {
     setPollAnswers((previous) => ({ ...previous, [questionId]: value }));
   };
 
+  const politicalSceneChart = (
+    <>
+      <p className="muted axis-legend">
+        Oś X: poglądy gospodarczo-społeczne (lewicowe → prawicowe). Oś Y: poglądy światopoglądowe
+        (progresywne → konserwatywne).
+      </p>
+      <div className="party-map">
+        <span className="axis-label axis-label-x-left">Lewica gospodarcza</span>
+        <span className="axis-label axis-label-x-right">Prawica gospodarcza</span>
+        <span className="axis-label axis-label-y-top">Konserwatyzm światopoglądowy</span>
+        <span className="axis-label axis-label-y-bottom">Progresywność światopoglądowa</span>
+        <div className="axis-x" />
+        <div className="axis-y" />
+        {parties.map((party) => (
+          <span
+            key={party.key}
+            className="party-dot"
+            style={{
+              left: `${(party.axis_x + 1) * 50}%`,
+              top: `${(1 - (party.axis_y + 1) * 0.5) * 100}%`
+            }}
+            title={party.axis_label}
+          >
+            {party.display_name}
+          </span>
+        ))}
+        {pollPosition && (
+          <span
+            className="party-dot user-dot"
+            style={{
+              left: `${(pollPosition.axis_x + 1) * 50}%`,
+              top: `${(1 - (pollPosition.axis_y + 1) * 0.5) * 100}%`
+            }}
+            title="Twoja pozycja z ankiety"
+          >
+            Ty
+          </span>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <main className="app-shell">
       <header className="card hero">
@@ -267,136 +312,143 @@ export default function HomePage() {
         </p>
       </header>
 
-      <section className="card section-card">
-        <h2>Krótka ankieta poglądów</h2>
-        <p className="muted">
-          Odpowiedz na kilka pytań, a obliczymy Twoją pozycję na osi politycznej i porównamy ją z
-          partiami.
-        </p>
-        <div className="poll-grid">
-          {pollQuestions.map((questionItem, index) => (
-            <fieldset key={questionItem.id} className="poll-question">
-              <legend>
-                {index + 1}. {questionItem.text}
-              </legend>
-              <div className="poll-options">
-                {pollOptions.map((option) => (
-                  <label key={`${questionItem.id}-${option.value}`} className="poll-option">
-                    <input
-                      type="radio"
-                      name={questionItem.id}
-                      checked={pollAnswers[questionItem.id] === option.value}
-                      onChange={() => onPollAnswerChange(questionItem.id, option.value)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          ))}
-        </div>
-
-        {pollPosition ? (
-          <div className="poll-summary">
-            <p>
-              <strong>Twoja pozycja:</strong> X={pollPosition.axis_x.toFixed(2)}, Y=
-              {pollPosition.axis_y.toFixed(2)}
-            </p>
-            <p className="muted">
-              Najbliżej Ci do:{" "}
-              {pollMatches.map((party, index) => (
-                <span key={party.key}>
-                  {index > 0 ? ", " : ""}
-                  {party.display_name} ({Math.round(party.similarity * 100)}%)
-                </span>
-              ))}
-              .
-            </p>
-          </div>
-        ) : (
-          <p className="muted">Wypełnij wszystkie pytania, aby zobaczyć wynik.</p>
-        )}
-      </section>
-
-      <section className="card section-card">
-        <h2>Pozycja partii na scenie politycznej</h2>
-        <p className="muted axis-legend">
-          Oś X: poglądy gospodarczo-społeczne (lewicowe → prawicowe). Oś Y: poglądy światopoglądowe
-          (progresywne → konserwatywne).
-        </p>
-        <div className="party-map">
-          <span className="axis-label axis-label-x-left">Lewica gospodarcza</span>
-          <span className="axis-label axis-label-x-right">Prawica gospodarcza</span>
-          <span className="axis-label axis-label-y-top">Konserwatyzm światopoglądowy</span>
-          <span className="axis-label axis-label-y-bottom">Progresywność światopoglądowa</span>
-          <div className="axis-x" />
-          <div className="axis-y" />
-          {parties.map((party) => (
-            <span
-              key={party.key}
-              className="party-dot"
-              style={{
-                left: `${(party.axis_x + 1) * 50}%`,
-                top: `${(1 - (party.axis_y + 1) * 0.5) * 100}%`
-              }}
-              title={party.axis_label}
-            >
-              {party.display_name}
-            </span>
-          ))}
-          {pollPosition && (
-            <span
-              className="party-dot user-dot"
-              style={{
-                left: `${(pollPosition.axis_x + 1) * 50}%`,
-                top: `${(1 - (pollPosition.axis_y + 1) * 0.5) * 100}%`
-              }}
-              title="Twoja pozycja z ankiety"
-            >
-              Ty
-            </span>
-          )}
-        </div>
-        <div className="position-justifications">
-          {parties.map((party) => (
-            <article key={`justification-${party.key}`} className="justification-item">
-              <h3>{party.display_name}</h3>
-              <p className="muted">
-                <strong>{party.axis_label}:</strong>{" "}
-                {party.axis_justification ?? "Uzasadnienie pozycji nie jest jeszcze dostępne."}
-              </p>
-            </article>
-          ))}
+      <section className="card section-card tabs-card">
+        <div className="tabs-nav" role="tablist" aria-label="Nawigacja sekcji">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "position"}
+            className={`tab-button ${activeTab === "position" ? "active" : ""}`}
+            onClick={() => setActiveTab("position")}
+          >
+            Pozycja partii na scenie politycznej
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "question"}
+            className={`tab-button ${activeTab === "question" ? "active" : ""}`}
+            onClick={() => setActiveTab("question")}
+          >
+            Pytanie do programów partii
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "poll"}
+            className={`tab-button ${activeTab === "poll" ? "active" : ""}`}
+            onClick={() => setActiveTab("poll")}
+          >
+            Ankieta poglądów
+          </button>
         </div>
       </section>
 
-      <section className="card section-card">
-        <form onSubmit={onSubmit} className="grid">
-          <label>
-            <strong>Pytanie do programów partii</strong>
-            <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
-          </label>
-
-          <div className="grid grid-2 party-selector">
+      {activeTab === "position" && (
+        <section className="card section-card">
+          <h2>Pozycja partii na scenie politycznej</h2>
+          {politicalSceneChart}
+          <div className="position-justifications">
             {parties.map((party) => (
-              <label key={party.key} className="party-option">
-                <input
-                  type="checkbox"
-                  checked={selectedParties.includes(party.key)}
-                  onChange={() => toggleParty(party.key)}
-                />
-                <span>{party.display_name}</span>
-              </label>
+              <article key={`justification-${party.key}`} className="justification-item">
+                <h3>{party.display_name}</h3>
+                <p className="muted">
+                  <strong>{party.axis_label}:</strong>{" "}
+                  {party.axis_justification ?? "Uzasadnienie pozycji nie jest jeszcze dostępne."}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {activeTab === "question" && (
+        <section className="card section-card">
+          <form onSubmit={onSubmit} className="grid">
+            <label>
+              <strong>Pytanie do programów partii</strong>
+              <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
+            </label>
+
+            <div className="grid grid-2 party-selector">
+              {parties.map((party) => (
+                <label key={party.key} className="party-option">
+                  <input
+                    type="checkbox"
+                    checked={selectedParties.includes(party.key)}
+                    onChange={() => toggleParty(party.key)}
+                  />
+                  <span>{party.display_name}</span>
+                </label>
+              ))}
+            </div>
+
+            <div>
+              <button type="submit" disabled={!canSubmit} className="primary">
+                {loading ? "Analizuję..." : "Zapytaj"}
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+
+      {activeTab === "poll" && (
+        <section className="card section-card">
+          <h2>Ankieta poglądów</h2>
+          <p className="muted">
+            Odpowiedz na kilka pytań, a obliczymy Twoją pozycję na osi politycznej i porównamy ją z
+            partiami.
+          </p>
+          <div className="poll-grid">
+            {pollQuestions.map((questionItem, index) => (
+              <fieldset key={questionItem.id} className="poll-question">
+                <legend>
+                  {index + 1}. {questionItem.text}
+                </legend>
+                <div className="poll-options">
+                  {pollOptions.map((option) => (
+                    <label key={`${questionItem.id}-${option.value}`} className="poll-option">
+                      <input
+                        type="radio"
+                        name={questionItem.id}
+                        checked={pollAnswers[questionItem.id] === option.value}
+                        onChange={() => onPollAnswerChange(questionItem.id, option.value)}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
             ))}
           </div>
 
-          <div>
-            <button type="submit" disabled={!canSubmit} className="primary">
-              {loading ? "Analizuję..." : "Zapytaj"}
-            </button>
+          {pollPosition ? (
+            <div className="poll-summary">
+              <p>
+                <strong>Twoja pozycja:</strong> X={pollPosition.axis_x.toFixed(2)}, Y=
+                {pollPosition.axis_y.toFixed(2)}
+              </p>
+              <p className="muted">
+                Najbliżej Ci do:{" "}
+                {pollMatches.map((party, index) => (
+                  <span key={party.key}>
+                    {index > 0 ? ", " : ""}
+                    {party.display_name} ({Math.round(party.similarity * 100)}%)
+                  </span>
+                ))}
+                .
+              </p>
+            </div>
+          ) : (
+            <p className="muted">Wypełnij wszystkie pytania, aby zobaczyć wynik.</p>
+          )}
+
+          <div className="poll-chart-block">
+            <h3>Scena polityczna i Twoja pozycja</h3>
+            {politicalSceneChart}
           </div>
-        </form>
-      </section>
+        </section>
+      )}
 
       {error && (
         <section className="card section-card error-card">

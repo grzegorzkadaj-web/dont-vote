@@ -64,6 +64,34 @@ p {
   margin-top: 16px;
 }
 
+.tabs-card {
+  padding: 12px;
+}
+
+.tabs-nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tab-button {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tab-button:hover:not(:disabled) {
+  border-color: #c0d0f9;
+  background: #f1f5ff;
+}
+
+.tab-button.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+}
+
 .hero {
   background: linear-gradient(136deg, #0f172a 0%, #111f42 58%, #0b214a 100%);
   color: #f8fafc;
@@ -177,6 +205,14 @@ p {
   margin-top: 10px;
   border-top: 1px solid var(--line);
   padding-top: 10px;
+}
+
+.poll-chart-block {
+  margin-top: 16px;
+}
+
+.poll-chart-block h3 {
+  margin-bottom: 10px;
 }
 
 textarea {

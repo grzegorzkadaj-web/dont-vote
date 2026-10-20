@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Nie głosuj — Porównywarka programów partii",
+  title: "Nie głosuj — Porównywarka programów partii politycznych",
   description: "Dopóki nie poznasz programu. Porównuj stanowiska partii na podstawie źródeł."
 };
 
