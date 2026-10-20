@@ -89,3 +89,18 @@ class VotingsSearchResponse(BaseModel):
     query: str
     results_count: int
     acts: list[ActVotingItem]
+
+
+class ContactSubmissionRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    category: str = Field(default="pytanie", min_length=2, max_length=64)
+    message: str = Field(min_length=10, max_length=5000)
+    rodo_consent: bool = Field(..., description="Zgoda na przetwarzanie danych osobowych (RODO)")
+    turnstile_token: str | None = None
+    honeypot: str | None = None
+
+
+class ContactSubmissionResponse(BaseModel):
+    status: str
+    message: str
+    submission_id: int | None = None

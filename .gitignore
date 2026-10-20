@@ -164,3 +164,5 @@ langchain-docs/
 node_modules/
 .next/
 out/
+*.db
+*.sqlite

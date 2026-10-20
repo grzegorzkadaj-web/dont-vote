@@ -1,21 +1,30 @@
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.backend.config import settings
+from src.backend.database import init_db, save_contact_submission
 from src.backend.parties import PARTY_CONFIGS, load_calculated_positions
 from src.backend.rag import RAGService
 from src.backend.schemas import (
     AskRequest,
     AskResponse,
+    ContactSubmissionRequest,
+    ContactSubmissionResponse,
     FeedbackRequest,
     PartyOverview,
     VotingsSearchRequest,
     VotingsSearchResponse,
+)
+from src.backend.security import (
+    anonymize_ip,
+    contact_rate_limiter,
+    verify_cloudflare_turnstile,
 )
 from src.backend.votings import SejmVotingService
 
@@ -25,7 +34,15 @@ allowed_frontend_origins = [
     if origin.strip()
 ]
 
-app = FastAPI(title="Polityczny RAG API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize local SQLite database
+    init_db()
+    yield
+
+
+app = FastAPI(title="Polityczny RAG API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_frontend_origins,
@@ -131,3 +148,61 @@ def search_votings_get(
         raise HTTPException(
             status_code=500, detail=f"Błąd wyszukiwania głosowań: {exc}"
         ) from exc
+
+
+@app.post("/api/contact", response_model=ContactSubmissionResponse)
+def submit_contact(
+    payload: ContactSubmissionRequest, request: Request
+) -> ContactSubmissionResponse:
+    # 1. Determine client IP (handles reverse proxy / Cloudflare CF-Connecting-IP / X-Forwarded-For)
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+
+    # 2. Honeypot protection against simple bot harvesters
+    if payload.honeypot and payload.honeypot.strip():
+        # Silently succeed for bots so they think their spam succeeded
+        return ContactSubmissionResponse(
+            status="ok",
+            message="Wiadomość została przyjęta.",
+        )
+
+    # 3. DDoS / brute-force rate limiting
+    if not contact_rate_limiter.is_allowed(client_ip):
+        raise HTTPException(
+            status_code=429,
+            detail="Zbyt wiele zapytań z Twojego adresu. Ze względów bezpieczeństwa prosimy odczekać kilka minut przed kolejną próbą.",
+        )
+
+    # 4. Mandatory RODO consent validation
+    if not payload.rodo_consent:
+        raise HTTPException(
+            status_code=400,
+            detail="Wymagana jest zgoda na przetwarzanie danych osobowych (RODO).",
+        )
+
+    # 5. Cloudflare Turnstile verification
+    turnstile_ok, turnstile_msg = verify_cloudflare_turnstile(
+        payload.turnstile_token, remote_ip=client_ip
+    )
+    if not turnstile_ok:
+        raise HTTPException(status_code=400, detail=turnstile_msg)
+
+    # 6. Save in local database
+    user_agent = request.headers.get("user-agent", "")[:500]
+    sub_id = save_contact_submission(
+        email=payload.email,
+        category=payload.category,
+        message=payload.message,
+        rodo_consent=payload.rodo_consent,
+        ip_address=anonymize_ip(client_ip),
+        user_agent=user_agent,
+    )
+
+    return ContactSubmissionResponse(
+        status="ok",
+        message="Dziękujemy! Twoja wiadomość została zapisana w bazie. Odpowiemy najszybciej jak to możliwe.",
+        submission_id=sub_id,
+    )

@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
     feedback_store_path: str = "src/backend/feedback.jsonl"
+    contact_db_path: str = "src/backend/contacts.db"
+    cloudflare_turnstile_secret_key: str = ""
+    contact_rate_limit_per_minute: int = 5
     chroma_persist_directory: str = ".chroma"
     party_positions_path: str = "src/backend/party_positions.json"
     party_positioning_k: int = 12
