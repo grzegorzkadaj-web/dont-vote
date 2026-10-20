@@ -27,6 +27,7 @@ Pinecone indices:
 - `retriever.py` – CLI query script for quick backend verification.
 - `src/backend` – FastAPI app and RAG logic.
 - `src/frontend` – Next.js UI.
+  - Głosowania: wyszukiwarka ustaw i statystyk głosowań partii z API Sejmu RP oraz ELI.
 
 ## Environment variables
 

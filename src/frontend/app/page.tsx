@@ -46,7 +46,52 @@ type PollOption = {
   label: string;
 };
 
-type TabKey = "position" | "question" | "poll";
+type VotingPartyStat = {
+  club_id: string;
+  club_name: string;
+  yes: number;
+  no: number;
+  abstain: number;
+  absent: number;
+  total: number;
+  stance: string;
+  percent_yes: number;
+  percent_no: number;
+  percent_abstain: number;
+};
+
+type VotingTotalVotes = {
+  yes: number;
+  no: number;
+  abstain: number;
+  absent: number;
+  total: number;
+};
+
+type ActVotingItem = {
+  id: string;
+  act_name: string;
+  short_description: string;
+  document_type: string;
+  sitting: number;
+  voting_number: number;
+  date: string | null;
+  topic: string | null;
+  passed: boolean;
+  display_address: string | null;
+  eli: string | null;
+  links: Record<string, string>;
+  total_votes: VotingTotalVotes;
+  parties: VotingPartyStat[];
+};
+
+type VotingsSearchResponse = {
+  query: string;
+  results_count: number;
+  acts: ActVotingItem[];
+};
+
+type TabKey = "position" | "question" | "poll" | "votings";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -108,6 +153,18 @@ const pollOptions: PollOption[] = [
   { value: 2, label: "Zdecydowanie się zgadzam" }
 ];
 
+const sampleVotingTopics = [
+  "Zdrowie",
+  "Podatki",
+  "Renta wdowia",
+  "In vitro",
+  "Ceny energii",
+  "Kredyt mieszkaniowy",
+  "Wakacje od ZUS",
+  "Edukacja",
+  "Obronność"
+];
+
 export default function HomePage() {
   const [question, setQuestion] = useState("Co partie mówią o ochronie zdrowia?");
   const [parties, setParties] = useState<PartyOverview[]>([]);
@@ -118,6 +175,12 @@ export default function HomePage() {
   const [feedbackState, setFeedbackState] = useState<Record<string, "saved" | undefined>>({});
   const [pollAnswers, setPollAnswers] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<TabKey>("position");
+
+  // Votings state
+  const [votingSubject, setVotingSubject] = useState("");
+  const [votingLoading, setVotingLoading] = useState(false);
+  const [votingResult, setVotingResult] = useState<VotingsSearchResponse | null>(null);
+  const [votingError, setVotingError] = useState<string | null>(null);
 
   useEffect(() => {
     void fetch(buildApiUrl("/api/parties"))
@@ -251,6 +314,43 @@ export default function HomePage() {
     setPollAnswers((previous) => ({ ...previous, [questionId]: value }));
   };
 
+  const runVotingSearch = async (subjectToSearch: string) => {
+    const trimmed = subjectToSearch.trim();
+    if (trimmed.length < 2) return;
+
+    setVotingSubject(trimmed);
+    setVotingLoading(true);
+    setVotingError(null);
+
+    try {
+      const response = await fetch(buildApiUrl("/api/votings/search"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: trimmed,
+          limit: 8
+        })
+      });
+
+      if (!response.ok) {
+        const details = await response.text();
+        throw new Error(`Błąd wyszukiwania: ${details}`);
+      }
+
+      const data = (await response.json()) as VotingsSearchResponse;
+      setVotingResult(data);
+    } catch (err) {
+      setVotingError(err instanceof Error ? err.message : "Nieznany błąd podczas pobierania głosowań.");
+    } finally {
+      setVotingLoading(false);
+    }
+  };
+
+  const onVotingSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    await runVotingSearch(votingSubject);
+  };
+
   const politicalSceneChart = (
     <>
       <p className="muted axis-legend">
@@ -302,13 +402,13 @@ export default function HomePage() {
           </div>
           <div>
             <p className="brand-name">Nie głosuj</p>
-            <p className="brand-tagline">Dopóki nie poznasz programu</p>
+            <p className="brand-tagline">Dopóki nie poznasz programu i głosowań</p>
           </div>
         </div>
-        <h1>Porównywarka programów partii</h1>
+        <h1>Porównywarka partii i głosowań Sejmu</h1>
         <p className="muted hero-copy">
-          Zadawaj pytania o programy, porównuj stanowiska i sprawdzaj źródła zanim podejmiesz
-          decyzję.
+          Zadawaj pytania o programy, sprawdzaj rzeczywiste głosowania posłów w Sejmie i poznaj
+          stanowiska partii zanim podejmiesz decyzję.
         </p>
       </header>
 
@@ -340,6 +440,15 @@ export default function HomePage() {
             onClick={() => setActiveTab("poll")}
           >
             Ankieta poglądów
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "votings"}
+            className={`tab-button ${activeTab === "votings" ? "active" : ""}`}
+            onClick={() => setActiveTab("votings")}
+          >
+            Głosowania
           </button>
         </div>
       </section>
@@ -447,6 +556,264 @@ export default function HomePage() {
             <h3>Scena polityczna i Twoja pozycja</h3>
             {politicalSceneChart}
           </div>
+        </section>
+      )}
+
+      {activeTab === "votings" && (
+        <section className="card section-card">
+          <h2>Głosowania w Sejmie</h2>
+          <p className="muted">
+            Wpisz interesujący Cię temat lub sprawę (np. zdrowie, podatki, renta wdowia, in vitro,
+            ceny energii, wakacje od ZUS), aby zobaczyć powiązane ustawy i sprawdzić, jak
+            głosowały poszczególne partie. Dane pobierane są bezpośrednio z oficjalnego API Sejmu RP
+            i Europejskiego Identyfikatora Prawa (ELI).
+          </p>
+
+          <form onSubmit={onVotingSubmit} className="votings-search-form">
+            <div className="search-input-wrapper">
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Czym się interesujesz? (np. ochrona zdrowia, podatki, in vitro, renta wdowia)..."
+                value={votingSubject}
+                onChange={(e) => setVotingSubject(e.target.value)}
+              />
+              <button
+                type="submit"
+                disabled={votingLoading || votingSubject.trim().length < 2}
+                className="primary search-btn"
+              >
+                {votingLoading ? "Szukam..." : "Szukaj"}
+              </button>
+            </div>
+
+            <div className="topic-suggestions">
+              <span className="suggestions-label">Przykładowe tematy:</span>
+              <div className="topic-pills-list">
+                {sampleVotingTopics.map((topic) => (
+                  <button
+                    key={topic}
+                    type="button"
+                    className="topic-pill"
+                    onClick={() => runVotingSearch(topic)}
+                  >
+                    {topic}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </form>
+
+          {votingLoading && (
+            <div className="votings-loading-box">
+              <div className="loading-spinner" aria-hidden />
+              <p>Pobieram ustawy i statystyki głosowań z API Sejmu RP...</p>
+            </div>
+          )}
+
+          {votingError && (
+            <div className="card section-card error-card">
+              <strong>Błąd:</strong> {votingError}
+            </div>
+          )}
+
+          {votingResult && !votingLoading && (
+            <div className="voting-results-container">
+              <div className="results-header">
+                <h3>
+                  Znaleziono {votingResult.results_count}{" "}
+                  {votingResult.results_count === 1
+                    ? "ustawę"
+                    : votingResult.results_count > 1 && votingResult.results_count < 5
+                    ? "ustawy"
+                    : "ustaw"}{" "}
+                  dla tematu „{votingResult.query}”
+                </h3>
+              </div>
+
+              {votingResult.acts.length === 0 ? (
+                <div className="empty-results-box">
+                  <p>Nie znaleziono ustaw powiązanych z tym zapytaniem w obecnej kadencji Sejmu.</p>
+                  <p className="muted">
+                    Spróbuj wpisać inne hasło lub kliknij jeden z przykładowych tematów powyżej.
+                  </p>
+                </div>
+              ) : (
+                <div className="acts-list">
+                  {votingResult.acts.map((act) => (
+                    <article key={act.id} className="act-card">
+                      <header className="act-header">
+                        <div className="act-title-row">
+                          <h4 className="act-title">{act.act_name}</h4>
+                          <span
+                            className={`status-badge ${
+                              act.passed ? "badge-passed" : "badge-rejected"
+                            }`}
+                          >
+                            {act.passed ? "✓ Uchwalona" : "✗ Odrzucona / w toku"}
+                          </span>
+                        </div>
+
+                        <div className="act-metadata">
+                          {act.date && (
+                            <span className="meta-tag">
+                              📅 {new Date(act.date).toLocaleDateString("pl-PL")}
+                            </span>
+                          )}
+                          <span className="meta-tag">
+                            Posiedzenie {act.sitting}, głosowanie {act.voting_number}
+                          </span>
+                          {act.display_address && (
+                            <span className="meta-tag meta-published">
+                              📜 {act.display_address}
+                            </span>
+                          )}
+                          <span className="meta-tag meta-type">{act.document_type}</span>
+                        </div>
+                      </header>
+
+                      <div className="act-desc-box">
+                        <div className="act-desc-title">Krótki opis ustawy:</div>
+                        <p className="act-desc-text">{act.short_description}</p>
+                      </div>
+
+                      <div className="total-votes-summary">
+                        <span className="summary-label">Wynik głosowania w Sejmie:</span>
+                        <div className="summary-stats-pills">
+                          <span className="stat-pill stat-pill-yes">
+                            Za: <strong>{act.total_votes.yes}</strong>
+                          </span>
+                          <span className="stat-pill stat-pill-no">
+                            Przeciw: <strong>{act.total_votes.no}</strong>
+                          </span>
+                          <span className="stat-pill stat-pill-abstain">
+                            Wstrzymało się: <strong>{act.total_votes.abstain}</strong>
+                          </span>
+                          <span className="stat-pill stat-pill-total">
+                            Frekwencja:{" "}
+                            <strong>
+                              {act.total_votes.total > 0
+                                ? Math.round(
+                                    ((act.total_votes.yes +
+                                      act.total_votes.no +
+                                      act.total_votes.abstain) /
+                                      act.total_votes.total) *
+                                      100
+                                  )
+                                : 0}
+                              %
+                            </strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="parties-voting-section">
+                        <h5>Jak głosowały poszczególne partie:</h5>
+                        <div className="parties-grid">
+                          {act.parties.map((party) => {
+                            const stanceClass =
+                              party.stance === "ZA"
+                                ? "stance-pill-yes"
+                                : party.stance === "PRZECIW"
+                                ? "stance-pill-no"
+                                : party.stance === "WSTRZYMAŁ SIĘ"
+                                ? "stance-pill-abstain"
+                                : party.stance === "NIEOBECNI"
+                                ? "stance-pill-absent"
+                                : "stance-pill-split";
+
+                            return (
+                              <div key={party.club_id} className="party-vote-card">
+                                <div className="party-card-top">
+                                  <span className="party-name" title={party.club_name}>
+                                    {party.club_name}
+                                  </span>
+                                  <span className={`stance-pill ${stanceClass}`}>
+                                    {party.stance}
+                                  </span>
+                                </div>
+
+                                <div
+                                  className="stacked-progress-bar"
+                                  title={`Za: ${party.yes} (${party.percent_yes}%), Przeciw: ${party.no} (${party.percent_no}%), Wstrzymało się: ${party.abstain} (${party.percent_abstain}%)`}
+                                >
+                                  <div
+                                    className="bar-seg bar-seg-yes"
+                                    style={{ width: `${party.percent_yes}%` }}
+                                  />
+                                  <div
+                                    className="bar-seg bar-seg-no"
+                                    style={{ width: `${party.percent_no}%` }}
+                                  />
+                                  <div
+                                    className="bar-seg bar-seg-abstain"
+                                    style={{ width: `${party.percent_abstain}%` }}
+                                  />
+                                </div>
+
+                                <div className="party-numbers-row">
+                                  <span className="num-item num-yes">{party.yes} za</span>
+                                  <span className="num-item num-no">{party.no} przeciw</span>
+                                  {party.abstain > 0 && (
+                                    <span className="num-item num-abstain">
+                                      {party.abstain} wstrz.
+                                    </span>
+                                  )}
+                                  {party.absent > 0 && (
+                                    <span className="num-item num-absent">
+                                      {party.absent} nieob.
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {Object.keys(act.links).length > 0 && (
+                        <div className="act-links-row">
+                          <span className="act-links-label">Źródła oficjalne:</span>
+                          <div className="links-group">
+                            {act.links.sejm_voting_pdf && (
+                              <a
+                                href={act.links.sejm_voting_pdf}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="act-link-pill"
+                              >
+                                📄 Wyniki głosowania Sejmu (PDF)
+                              </a>
+                            )}
+                            {act.links.isap && (
+                              <a
+                                href={act.links.isap}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="act-link-pill"
+                              >
+                                🌐 Dokument w ISAP
+                              </a>
+                            )}
+                            {act.links.eli && (
+                              <a
+                                href={act.links.eli}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="act-link-pill"
+                              >
+                                🇪🇺 Europejski Identyfikator Prawa (ELI)
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 

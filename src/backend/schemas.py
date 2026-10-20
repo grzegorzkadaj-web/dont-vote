@@ -39,3 +39,53 @@ class FeedbackRequest(BaseModel):
     question: str = Field(min_length=5, max_length=2_000)
     party_key: str = Field(min_length=2, max_length=64)
     helpful: bool
+
+
+class VotingPartyStat(BaseModel):
+    club_id: str
+    club_name: str
+    yes: int
+    no: int
+    abstain: int
+    absent: int
+    total: int
+    stance: str
+    percent_yes: float
+    percent_no: float
+    percent_abstain: float
+
+
+class VotingTotalVotes(BaseModel):
+    yes: int
+    no: int
+    abstain: int
+    absent: int = 0
+    total: int
+
+
+class ActVotingItem(BaseModel):
+    id: str
+    act_name: str
+    short_description: str
+    document_type: str = "projekt ustawy"
+    sitting: int
+    voting_number: int
+    date: str | None = None
+    topic: str | None = None
+    passed: bool = True
+    display_address: str | None = None
+    eli: str | None = None
+    links: dict[str, str] = Field(default_factory=dict)
+    total_votes: VotingTotalVotes
+    parties: list[VotingPartyStat] = Field(default_factory=list)
+
+
+class VotingsSearchRequest(BaseModel):
+    query: str = Field(min_length=2, max_length=500)
+    limit: int = Field(default=8, ge=1, le=20)
+
+
+class VotingsSearchResponse(BaseModel):
+    query: str
+    results_count: int
+    acts: list[ActVotingItem]

@@ -3,13 +3,21 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.backend.config import settings
 from src.backend.parties import PARTY_CONFIGS, load_calculated_positions
 from src.backend.rag import RAGService
-from src.backend.schemas import AskRequest, AskResponse, FeedbackRequest, PartyOverview
+from src.backend.schemas import (
+    AskRequest,
+    AskResponse,
+    FeedbackRequest,
+    PartyOverview,
+    VotingsSearchRequest,
+    VotingsSearchResponse,
+)
+from src.backend.votings import SejmVotingService
 
 allowed_frontend_origins = [
     origin.strip().rstrip("/")
@@ -30,6 +38,11 @@ app.add_middleware(
 @lru_cache(maxsize=1)
 def get_rag_service() -> RAGService:
     return RAGService()
+
+
+@lru_cache(maxsize=1)
+def get_sejm_voting_service() -> SejmVotingService:
+    return SejmVotingService()
 
 
 @app.get("/health")
@@ -89,3 +102,32 @@ def submit_feedback(payload: FeedbackRequest) -> dict[str, str]:
         file.write(json.dumps(row, ensure_ascii=False) + "\n")
 
     return {"status": "saved"}
+
+
+@app.post("/api/votings/search", response_model=VotingsSearchResponse)
+def search_votings(payload: VotingsSearchRequest) -> VotingsSearchResponse:
+    try:
+        acts = get_sejm_voting_service().search_acts_and_votes(
+            query=payload.query, limit=payload.limit
+        )
+        return VotingsSearchResponse(
+            query=payload.query, results_count=len(acts), acts=acts
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Błąd wyszukiwania głosowań: {exc}"
+        ) from exc
+
+
+@app.get("/api/votings/search", response_model=VotingsSearchResponse)
+def search_votings_get(
+    q: str = Query(..., min_length=2, description="Temat lub słowo kluczowe"),
+    limit: int = Query(8, ge=1, le=20),
+) -> VotingsSearchResponse:
+    try:
+        acts = get_sejm_voting_service().search_acts_and_votes(query=q, limit=limit)
+        return VotingsSearchResponse(query=q, results_count=len(acts), acts=acts)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Błąd wyszukiwania głosowań: {exc}"
+        ) from exc
