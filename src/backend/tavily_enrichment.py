@@ -1,15 +1,18 @@
+import logging
+import os
 from typing import Any
 
 from langchain_core.documents import Document
 
-from logger import log_info, log_warning
+logger = logging.getLogger(__name__)
 
 try:
-    from langchain_tavily import TavilyCrawl, TavilyExtract, TavilyMap
+    from langchain_tavily import TavilyCrawl, TavilyExtract, TavilyMap, TavilySearch
 except ImportError:  # pragma: no cover
     TavilyCrawl = None
     TavilyExtract = None
     TavilyMap = None
+    TavilySearch = None
 
 
 class TavilyEnricher:
@@ -77,13 +80,13 @@ class TavilyEnricher:
             mapped = self.mapper.invoke({"url": seed_url})
             discovered_urls.update(self._extract_urls(mapped))
         except Exception as exc:
-            log_warning(f"TavilyMap failed for '{seed_url}': {exc}")
+            logger.warning("TavilyMap failed for '%s': %s", seed_url, exc)
 
         try:
             crawled = self.crawler.invoke({"url": seed_url})
             discovered_urls.update(self._extract_urls(crawled))
         except Exception as exc:
-            log_warning(f"TavilyCrawl failed for '{seed_url}': {exc}")
+            logger.warning("TavilyCrawl failed for '%s': %s", seed_url, exc)
 
         return discovered_urls
 
@@ -93,7 +96,7 @@ class TavilyEnricher:
             try:
                 extracted = self.extractor.invoke({"urls": [url]})
             except Exception as exc:
-                log_warning(f"TavilyExtract failed for '{url}': {exc}")
+                logger.warning("TavilyExtract failed for '%s': %s", url, exc)
                 continue
 
             text_fragments = self._extract_text_values(extracted)
@@ -108,3 +111,72 @@ class TavilyEnricher:
                 )
             )
         return documents
+
+
+class TavilyDeputyService:
+    def __init__(self, max_results: int = 5) -> None:
+        self.max_results = max_results
+        self._search_tool = None
+        if TavilySearch is not None:
+            try:
+                from src.backend.config import settings
+
+                api_key = settings.tavily_api_key or os.getenv("TAVILY_API_KEY")
+                if api_key:
+                    self._search_tool = TavilySearch(
+                        max_results=self.max_results,
+                        include_answer=True,
+                        tavily_api_key=api_key,
+                    )
+                else:
+                    self._search_tool = TavilySearch(
+                        max_results=self.max_results, include_answer=True
+                    )
+            except Exception as exc:
+                logger.warning("Failed to initialize TavilySearch: %s", exc)
+
+    def search_deputy_public_info(
+        self, deputy_name: str, party_name: str | None = None
+    ) -> dict[str, Any]:
+        """Wyszukuje informacje publiczne o pośle za pomocą Tavily."""
+        query = (
+            f"{deputy_name} poseł {party_name or ''} Sejm działalność polityczna"
+        ).strip()
+
+        if self._search_tool is None:
+            return {
+                "query": query,
+                "answer": "Usługa Tavily nie jest obecnie skonfigurowana lub brak klucza API.",
+                "sources": [],
+            }
+
+        try:
+            res = self._search_tool.invoke(query)
+            if not isinstance(res, dict):
+                return {"query": query, "answer": None, "sources": []}
+
+            answer = res.get("answer")
+            raw_results = res.get("results") or []
+            sources = []
+            for item in raw_results:
+                if isinstance(item, dict):
+                    sources.append({
+                        "title": item.get("title") or "Brak tytułu",
+                        "url": item.get("url") or "",
+                        "snippet": item.get("content") or "",
+                        "score": item.get("score"),
+                    })
+
+            return {
+                "query": query,
+                "answer": answer,
+                "sources": sources,
+            }
+        except Exception as exc:
+            logger.warning("Błąd wyszukiwania Tavily dla '%s': %s", deputy_name, exc)
+            return {
+                "query": query,
+                "answer": f"Wystąpił błąd podczas pobierania informacji z Tavily: {exc}",
+                "sources": [],
+            }
+

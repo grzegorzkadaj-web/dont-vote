@@ -16,6 +16,10 @@ from src.backend.schemas import (
     AskResponse,
     ContactSubmissionRequest,
     ContactSubmissionResponse,
+    DeputyActivityStats,
+    DeputyDossierResponse,
+    DeputyListItem,
+    DeputyPublicInfo,
     FeedbackRequest,
     PartyOverview,
     VotingsSearchRequest,
@@ -26,6 +30,7 @@ from src.backend.security import (
     contact_rate_limiter,
     verify_cloudflare_turnstile,
 )
+from src.backend.tavily_enrichment import TavilyDeputyService
 from src.backend.votings import SejmVotingService
 
 allowed_frontend_origins = [
@@ -60,6 +65,11 @@ def get_rag_service() -> RAGService:
 @lru_cache(maxsize=1)
 def get_sejm_voting_service() -> SejmVotingService:
     return SejmVotingService()
+
+
+@lru_cache(maxsize=1)
+def get_tavily_deputy_service() -> TavilyDeputyService:
+    return TavilyDeputyService()
 
 
 @app.get("/health")
@@ -148,6 +158,54 @@ def search_votings_get(
         raise HTTPException(
             status_code=500, detail=f"Błąd wyszukiwania głosowań: {exc}"
         ) from exc
+
+
+@app.get("/api/deputies", response_model=list[DeputyListItem])
+def list_deputies() -> list[DeputyListItem]:
+    try:
+        mps = get_sejm_voting_service().get_deputies_list()
+        return [DeputyListItem(**mp) for mp in mps]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Błąd pobierania listy posłów: {exc}"
+        ) from exc
+
+
+@app.get("/api/deputies/{deputy_id}/dossier", response_model=DeputyDossierResponse)
+def get_deputy_dossier(deputy_id: int) -> DeputyDossierResponse:
+    voting_svc = get_sejm_voting_service()
+    deputy_dict = voting_svc.get_deputy_details(deputy_id)
+    if not deputy_dict or not deputy_dict.get("id"):
+        raise HTTPException(status_code=404, detail="Nie znaleziono posła o podanym ID.")
+
+    try:
+        activity_stats_dict = voting_svc.get_deputy_activity_stats(deputy_id)
+        activity_stats = DeputyActivityStats(**activity_stats_dict)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Błąd pobierania statystyk posła z Sejm API: {exc}",
+        ) from exc
+
+    try:
+        tavily_svc = get_tavily_deputy_service()
+        public_info_dict = tavily_svc.search_deputy_public_info(
+            deputy_name=deputy_dict.get("first_last_name", ""),
+            party_name=activity_stats.party_name,
+        )
+        public_info = DeputyPublicInfo(**public_info_dict)
+    except Exception as exc:
+        public_info = DeputyPublicInfo(
+            query=f"{deputy_dict.get('first_last_name', '')} Sejm",
+            answer=f"Błąd pobierania danych publicznych: {exc}",
+            sources=[],
+        )
+
+    return DeputyDossierResponse(
+        deputy=DeputyListItem(**deputy_dict),
+        activity_stats=activity_stats,
+        public_info=public_info,
+    )
 
 
 @app.post("/api/contact", response_model=ContactSubmissionResponse)

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     chroma_persist_directory: str = ".chroma"
     party_positions_path: str = "src/backend/party_positions.json"
     party_positioning_k: int = 12
+    tavily_api_key: str = ""
 
 
 settings = Settings()

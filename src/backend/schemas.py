@@ -104,3 +104,52 @@ class ContactSubmissionResponse(BaseModel):
     status: str
     message: str
     submission_id: int | None = None
+
+
+class DeputyListItem(BaseModel):
+    id: int
+    first_last_name: str
+    last_first_name: str
+    club: str
+    club_display_name: str
+    district_name: str | None = None
+    district_num: int | None = None
+    email: str | None = None
+    photo_url: str
+    active: bool = True
+
+
+class DeputyActivityStats(BaseModel):
+    deputy_id: int
+    total_votings: int
+    voted_votings: int
+    unexcused_absences: int
+    unexcused_absence_days: int
+    excused_absences: int
+    attendance_rate: float
+    club_id: str
+    party_name: str
+    act_proposals_count: int
+    interpellations_count: int
+    written_questions_count: int
+    term: int = 10
+
+
+class TavilySearchResultItem(BaseModel):
+    title: str
+    url: str
+    snippet: str
+    score: float | None = None
+
+
+class DeputyPublicInfo(BaseModel):
+    query: str
+    answer: str | None = None
+    sources: list[TavilySearchResultItem] = Field(default_factory=list)
+
+
+class DeputyDossierResponse(BaseModel):
+    deputy: DeputyListItem
+    activity_stats: DeputyActivityStats
+    public_info: DeputyPublicInfo
+

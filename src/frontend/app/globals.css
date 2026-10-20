@@ -1127,3 +1127,534 @@ button:disabled {
   font-size: 0.92rem;
   margin-bottom: 4px;
 }
+
+/* ─── Dossier parlamentarzysty ─── */
+
+.dossier-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.dossier-intro h2 {
+  margin-bottom: 6px;
+}
+
+.dossier-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .dossier-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.deputies-sidebar {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 800px;
+}
+
+.deputies-filter-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deputy-search-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  background: var(--surface);
+  color: var(--text);
+  box-sizing: border-box;
+}
+
+.deputy-search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.deputy-club-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  background: var(--surface);
+  color: var(--text);
+  box-sizing: border-box;
+}
+
+.deputies-count-badge {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.deputies-loading-box {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.deputies-scroll-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 640px;
+  padding-right: 4px;
+}
+
+.deputy-item-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 120ms ease;
+  width: 100%;
+}
+
+.deputy-item-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.deputy-item-btn.selected {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.deputy-avatar {
+  width: 40px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #e2e8f0;
+  flex-shrink: 0;
+}
+
+.deputy-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.deputy-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deputy-sub-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.deputy-club-badge {
+  font-weight: 700;
+  background: #e2e8f0;
+  color: #334155;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.deputy-district-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deputies-empty-text {
+  text-align: center;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Detail view */
+.deputy-detail-view {
+  min-height: 480px;
+}
+
+.deputy-placeholder-box {
+  background: var(--surface-soft);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.placeholder-icon {
+  font-size: 3rem;
+  opacity: 0.6;
+}
+
+.deputy-placeholder-box h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.deputy-placeholder-box p {
+  max-width: 520px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.deputy-detail-loading {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--muted);
+}
+
+.deputy-dossier-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.deputy-profile-card {
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  align-items: center;
+}
+
+@media (max-width: 600px) {
+  .deputy-profile-card {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+.profile-avatar {
+  width: 90px;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid var(--line);
+  background: #e2e8f0;
+  flex-shrink: 0;
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-info h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  color: var(--text);
+}
+
+.profile-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge-club {
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 999px;
+}
+
+.badge-term {
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  background: #f1f5f9;
+  color: #475569;
+  border-radius: 999px;
+}
+
+.badge-district {
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  color: #64748b;
+  border-radius: 999px;
+}
+
+.profile-contact {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.profile-contact a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.profile-contact a:hover {
+  text-decoration: underline;
+}
+
+/* Dossier sections */
+.dossier-section {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
+}
+
+.section-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.section-title-row h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--text);
+}
+
+.source-tag {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.stats-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.stat-card {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.stat-value.text-warn {
+  color: #dc2626;
+}
+
+.stat-value.text-good {
+  color: #16a34a;
+}
+
+.stat-value.text-accent {
+  color: #2563eb;
+}
+
+.stat-label {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.stat-subtext {
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+.additional-activities-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.activity-mini-pill {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.84rem;
+  color: #475569;
+}
+
+.activity-mini-pill strong {
+  color: var(--text);
+}
+
+/* Tavily Public Info Section */
+.tavily-answer-card {
+  background: #f8fafc;
+  border-left: 4px solid var(--primary);
+  border-radius: 0 10px 10px 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.answer-badge {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--primary);
+}
+
+.answer-text {
+  font-size: 0.94rem;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-line;
+}
+
+.tavily-no-answer {
+  font-size: 0.88rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.tavily-sources-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.tavily-sources-container h4 {
+  margin: 0;
+  font-size: 0.96rem;
+  color: var(--text);
+}
+
+.tavily-sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tavily-source-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 120ms ease;
+}
+
+.tavily-source-card:hover {
+  border-color: #cbd5e1;
+}
+
+.source-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.source-title-link {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.source-title-link:hover {
+  text-decoration: underline;
+}
+
+.source-score {
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: var(--surface-soft);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.source-snippet {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: #475569;
+  margin: 0;
+}
+
+.source-domain a {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.source-domain a:hover {
+  color: var(--primary);
+}
+

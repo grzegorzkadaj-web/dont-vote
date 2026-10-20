@@ -91,7 +91,55 @@ type VotingsSearchResponse = {
   acts: ActVotingItem[];
 };
 
-type TabKey = "position" | "question" | "poll" | "votings";
+type DeputyListItem = {
+  id: number;
+  first_last_name: string;
+  last_first_name: string;
+  club: string;
+  club_display_name: string;
+  district_name: string | null;
+  district_num: number | null;
+  email: string | null;
+  photo_url: string;
+  active: boolean;
+};
+
+type DeputyActivityStats = {
+  deputy_id: number;
+  total_votings: number;
+  voted_votings: number;
+  unexcused_absences: number;
+  unexcused_absence_days: number;
+  excused_absences: number;
+  attendance_rate: number;
+  club_id: string;
+  party_name: string;
+  act_proposals_count: number;
+  interpellations_count: number;
+  written_questions_count: number;
+  term: number;
+};
+
+type TavilySearchResultItem = {
+  title: string;
+  url: string;
+  snippet: string;
+  score: number | null;
+};
+
+type DeputyPublicInfo = {
+  query: string;
+  answer: string | null;
+  sources: TavilySearchResultItem[];
+};
+
+type DeputyDossierResponse = {
+  deputy: DeputyListItem;
+  activity_stats: DeputyActivityStats;
+  public_info: DeputyPublicInfo;
+};
+
+type TabKey = "position" | "question" | "poll" | "votings" | "dossier";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -181,6 +229,17 @@ export default function HomePage() {
   const [votingLoading, setVotingLoading] = useState(false);
   const [votingResult, setVotingResult] = useState<VotingsSearchResponse | null>(null);
   const [votingError, setVotingError] = useState<string | null>(null);
+
+  // Deputy dossier state
+  const [deputies, setDeputies] = useState<DeputyListItem[]>([]);
+  const [deputiesLoading, setDeputiesLoading] = useState(false);
+  const [deputiesError, setDeputiesError] = useState<string | null>(null);
+  const [deputySearchQuery, setDeputySearchQuery] = useState("");
+  const [selectedClubFilter, setSelectedClubFilter] = useState<string>("ALL");
+  const [selectedDeputyId, setSelectedDeputyId] = useState<number | null>(null);
+  const [dossierLoading, setDossierLoading] = useState(false);
+  const [dossierError, setDossierError] = useState<string | null>(null);
+  const [dossierData, setDossierData] = useState<DeputyDossierResponse | null>(null);
 
   useEffect(() => {
     void fetch(buildApiUrl("/api/parties"))
@@ -351,6 +410,79 @@ export default function HomePage() {
     await runVotingSearch(votingSubject);
   };
 
+  const loadDeputiesList = async () => {
+    if (deputies.length > 0 || deputiesLoading) return;
+    setDeputiesLoading(true);
+    setDeputiesError(null);
+    try {
+      const response = await fetch(buildApiUrl("/api/deputies"));
+      if (!response.ok) {
+        throw new Error("Nie udało się pobrać listy posłów z Sejmu RP.");
+      }
+      const data = (await response.json()) as DeputyListItem[];
+      setDeputies(data);
+    } catch (err) {
+      setDeputiesError(err instanceof Error ? err.message : "Błąd podczas ładowania posłów.");
+    } finally {
+      setDeputiesLoading(false);
+    }
+  };
+
+  const loadDeputyDossier = async (deputyId: number) => {
+    setSelectedDeputyId(deputyId);
+    setDossierLoading(true);
+    setDossierError(null);
+    try {
+      const response = await fetch(buildApiUrl(`/api/deputies/${deputyId}/dossier`));
+      if (!response.ok) {
+        const details = await response.text();
+        throw new Error(`Błąd pobierania dossier posła: ${details}`);
+      }
+      const data = (await response.json()) as DeputyDossierResponse;
+      setDossierData(data);
+    } catch (err) {
+      setDossierError(err instanceof Error ? err.message : "Nieznany błąd podczas ładowania dossier posła.");
+    } finally {
+      setDossierLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "dossier") {
+      void loadDeputiesList();
+    }
+  }, [activeTab]);
+
+  const uniqueClubs = useMemo(() => {
+    const clubMap = new Map<string, string>();
+    for (const d of deputies) {
+      if (d.club && !clubMap.has(d.club)) {
+        clubMap.set(d.club, d.club_display_name || d.club);
+      }
+    }
+    return Array.from(clubMap.entries()).map(([club, displayName]) => ({
+      club,
+      displayName
+    }));
+  }, [deputies]);
+
+  const filteredDeputies = useMemo(() => {
+    const query = deputySearchQuery.trim().toLowerCase();
+    return deputies.filter((d) => {
+      const matchesClub = selectedClubFilter === "ALL" || d.club === selectedClubFilter;
+      if (!matchesClub) return false;
+      if (!query) return true;
+      const fullName = d.first_last_name.toLowerCase();
+      const clubName = (d.club_display_name || d.club).toLowerCase();
+      const district = (d.district_name || "").toLowerCase();
+      return (
+        fullName.includes(query) ||
+        clubName.includes(query) ||
+        district.includes(query)
+      );
+    });
+  }, [deputies, deputySearchQuery, selectedClubFilter]);
+
   const politicalSceneChart = (
     <>
       <p className="muted axis-legend">
@@ -405,11 +537,7 @@ export default function HomePage() {
             <p className="brand-tagline">Dopóki nie poznasz programu i głosowań</p>
           </div>
         </div>
-        <h1>Porównywarka partii i głosowań Sejmu</h1>
-        <p className="muted hero-copy">
-          Zadawaj pytania o programy, sprawdzaj rzeczywiste głosowania posłów w Sejmie i poznaj
-          stanowiska partii zanim podejmiesz decyzję.
-        </p>
+        <h2>Zadawaj pytania o programy, sprawdzaj rzeczywiste głosowania posłów w Sejmie i poznaj stanowiska partii zanim podejmiesz decyzję.</h2>
       </header>
 
       <section className="card section-card tabs-card">
@@ -449,6 +577,15 @@ export default function HomePage() {
             onClick={() => setActiveTab("votings")}
           >
             Głosowania
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "dossier"}
+            className={`tab-button ${activeTab === "dossier" ? "active" : ""}`}
+            onClick={() => setActiveTab("dossier")}
+          >
+            Dossier parlamentarzysty
           </button>
         </div>
       </section>
@@ -814,6 +951,280 @@ export default function HomePage() {
               )}
             </div>
           )}
+        </section>
+      )}
+
+      {activeTab === "dossier" && (
+        <section className="card section-card dossier-container">
+          <div className="dossier-intro">
+            <h2>Dossier parlamentarzysty</h2>
+            <p className="muted">
+              Sprawdź statystyki aktywności posłów w Sejmie X kadencji oraz niezależne publiczne informacje
+              zebrane przez sztuczną inteligencję z sieci.
+            </p>
+          </div>
+
+          <div className="dossier-layout">
+            {/* Left sidebar: Deputies list */}
+            <aside className="deputies-sidebar">
+              <div className="deputies-filter-box">
+                <input
+                  type="text"
+                  placeholder="Szukaj posła po nazwisku lub okręgu..."
+                  value={deputySearchQuery}
+                  onChange={(e) => setDeputySearchQuery(e.target.value)}
+                  className="deputy-search-input"
+                />
+
+                <div className="deputies-club-filter">
+                  <select
+                    value={selectedClubFilter}
+                    onChange={(e) => setSelectedClubFilter(e.target.value)}
+                    className="deputy-club-select"
+                  >
+                    <option value="ALL">Wszystkie kluby i koła ({deputies.length})</option>
+                    {uniqueClubs.map((clubItem) => (
+                      <option key={clubItem.club} value={clubItem.club}>
+                        {clubItem.club} – {clubItem.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="deputies-count-badge">
+                  Posłowie: <strong>{filteredDeputies.length}</strong> / {deputies.length}
+                </div>
+              </div>
+
+              {deputiesLoading && (
+                <div className="deputies-loading-box">
+                  <div className="loading-spinner" aria-hidden />
+                  <p>Ładowanie listy posłów...</p>
+                </div>
+              )}
+
+              {deputiesError && (
+                <div className="error-card small">
+                  <strong>Błąd:</strong> {deputiesError}
+                </div>
+              )}
+
+              <div className="deputies-scroll-list" role="list">
+                {filteredDeputies.map((deputy) => {
+                  const isSelected = selectedDeputyId === deputy.id;
+                  return (
+                    <button
+                      key={deputy.id}
+                      type="button"
+                      role="listitem"
+                      onClick={() => void loadDeputyDossier(deputy.id)}
+                      className={`deputy-item-btn ${isSelected ? "selected" : ""}`}
+                    >
+                      <img
+                        src={deputy.photo_url}
+                        alt={deputy.first_last_name}
+                        className="deputy-avatar"
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
+                        }}
+                      />
+                      <div className="deputy-meta">
+                        <div className="deputy-name">{deputy.first_last_name}</div>
+                        <div className="deputy-sub-meta">
+                          <span className="deputy-club-badge">{deputy.club}</span>
+                          {deputy.district_name && (
+                            <span className="deputy-district-text">
+                              {deputy.district_name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+                {!deputiesLoading && filteredDeputies.length === 0 && (
+                  <div className="deputies-empty-text">Nie znaleziono posłów spełniających kryteria.</div>
+                )}
+              </div>
+            </aside>
+
+            {/* Right main panel: Dossier details */}
+            <div className="deputy-detail-view">
+              {!selectedDeputyId && !dossierLoading && (
+                <div className="deputy-placeholder-box">
+                  <div className="placeholder-icon">👤</div>
+                  <h3>Wybierz parlamentarzystę z listy</h3>
+                  <p className="muted">
+                    Kliknij nazwisko posła po lewej stronie, aby wyświetlić pełne statystyki sejmowej aktywności
+                    (głosowania, nieusprawiedliwione nieobecności, projekty ustaw) oraz zweryfikowane publiczne
+                    informacje z sieci za pośrednictwem Tavily.
+                  </p>
+                </div>
+              )}
+
+              {dossierLoading && (
+                <div className="deputy-detail-loading">
+                  <div className="loading-spinner" aria-hidden />
+                  <p>Generuję dossier parlamentarzysty (statystyki Sejmu + Tavily)...</p>
+                </div>
+              )}
+
+              {dossierError && (
+                <div className="card section-card error-card">
+                  <strong>Błąd:</strong> {dossierError}
+                </div>
+              )}
+
+              {dossierData && !dossierLoading && (
+                <div className="deputy-dossier-content">
+                  {/* Deputy header */}
+                  <div className="deputy-profile-card">
+                    <img
+                      src={dossierData.deputy.photo_url}
+                      alt={dossierData.deputy.first_last_name}
+                      className="profile-avatar"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
+                      }}
+                    />
+                    <div className="profile-info">
+                      <h2>{dossierData.deputy.first_last_name}</h2>
+                      <div className="profile-badges">
+                        <span className="badge-club">
+                          {dossierData.activity_stats.party_name} ({dossierData.activity_stats.club_id})
+                        </span>
+                        <span className="badge-term">Kadencja {dossierData.activity_stats.term}</span>
+                        {dossierData.deputy.district_name && (
+                          <span className="badge-district">
+                            Okręg nr {dossierData.deputy.district_num} ({dossierData.deputy.district_name})
+                          </span>
+                        )}
+                      </div>
+                      {dossierData.deputy.email && (
+                        <div className="profile-contact">
+                          ✉️ <a href={`mailto:${dossierData.deputy.email}`}>{dossierData.deputy.email}</a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Section 1: Sejm Activity Stats */}
+                  <section className="dossier-section activity-section">
+                    <div className="section-title-row">
+                      <h3>📊 1. Statystyki aktywności poselskiej (API Sejmu RP)</h3>
+                      <span className="source-tag">Oficjalne dane Sejmu</span>
+                    </div>
+
+                    <div className="stats-metric-grid">
+                      <div className="stat-card">
+                        <div className="stat-value">{dossierData.activity_stats.total_votings}</div>
+                        <div className="stat-label">Liczba głosowań ogółem</div>
+                        <div className="stat-subtext">
+                          Wziął udział w: <strong>{dossierData.activity_stats.voted_votings}</strong> (
+                          {dossierData.activity_stats.attendance_rate.toFixed(1)}%)
+                        </div>
+                      </div>
+
+                      <div className="stat-card">
+                        <div
+                          className={`stat-value ${
+                            dossierData.activity_stats.unexcused_absences > 0 ? "text-warn" : "text-good"
+                          }`}
+                        >
+                          {dossierData.activity_stats.unexcused_absences}
+                        </div>
+                        <div className="stat-label">Nieusprawiedliwione nieobecności</div>
+                        <div className="stat-subtext">
+                          Dni opuszczone: <strong>{dossierData.activity_stats.unexcused_absence_days}</strong>
+                          {dossierData.activity_stats.excused_absences > 0 &&
+                            ` (usprawiedliwione: ${dossierData.activity_stats.excused_absences})`}
+                        </div>
+                      </div>
+
+                      <div className="stat-card">
+                        <div className="stat-value">{dossierData.activity_stats.club_id}</div>
+                        <div className="stat-label">Przynależność klubowa</div>
+                        <div className="stat-subtext">{dossierData.activity_stats.party_name}</div>
+                      </div>
+
+                      <div className="stat-card">
+                        <div className="stat-value text-accent">
+                          {dossierData.activity_stats.act_proposals_count}
+                        </div>
+                        <div className="stat-label">Poselskie projekty ustaw</div>
+                        <div className="stat-subtext">Wnioski w X kadencji (inicjatywy poselskie)</div>
+                      </div>
+                    </div>
+
+                    <div className="additional-activities-row">
+                      <div className="activity-mini-pill">
+                        📝 Interpelacje poselskie: <strong>{dossierData.activity_stats.interpellations_count}</strong>
+                      </div>
+                      <div className="activity-mini-pill">
+                        ❓ Zapytania poselskie: <strong>{dossierData.activity_stats.written_questions_count}</strong>
+                      </div>
+                      <div className="activity-mini-pill">
+                        🎯 Frekwencja w głosowaniach: <strong>{dossierData.activity_stats.attendance_rate.toFixed(1)}%</strong>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Section 2: Other Public Information via Tavily */}
+                  <section className="dossier-section public-info-section">
+                    <div className="section-title-row">
+                      <h3>🌐 2. Pozostałe informacje publiczne (Tavily AI Search)</h3>
+                      <span className="source-tag">Wyszukiwanie otwartych źródeł</span>
+                    </div>
+
+                    {dossierData.public_info.answer ? (
+                      <div className="tavily-answer-card">
+                        <div className="answer-badge">Synteza AI ze źródeł publicznych</div>
+                        <div className="answer-text">{dossierData.public_info.answer}</div>
+                      </div>
+                    ) : (
+                      <div className="tavily-no-answer">
+                        Brak wygenerowanego podsumowania tekstowego dla tej osoby. Poniżej znajdują się znalezione źródła.
+                      </div>
+                    )}
+
+                    <div className="tavily-sources-container">
+                      <h4>Znalezione materiały i artykuły w sieci:</h4>
+                      {dossierData.public_info.sources.length === 0 ? (
+                        <p className="muted">Nie odnaleziono bezpośrednich wpisów publicznych w usłudze Tavily.</p>
+                      ) : (
+                        <div className="tavily-sources-list">
+                          {dossierData.public_info.sources.map((src, index) => (
+                            <article key={`${src.url}-${index}`} className="tavily-source-card">
+                              <div className="source-card-header">
+                                <a
+                                  href={src.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="source-title-link"
+                                >
+                                  {src.title || src.url}
+                                </a>
+                                {src.score !== null && src.score !== undefined && (
+                                  <span className="source-score">trafność: {src.score.toFixed(2)}</span>
+                                )}
+                              </div>
+                              <p className="source-snippet">{src.snippet}</p>
+                              <div className="source-domain">
+                                <a href={src.url} target="_blank" rel="noreferrer">
+                                  {src.url}
+                                </a>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                </div>
+              )}
+            </div>
+          </div>
         </section>
       )}
 

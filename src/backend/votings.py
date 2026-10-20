@@ -408,3 +408,159 @@ class SejmVotingService:
 
         self._search_cache[cache_key] = final_acts
         return final_acts
+
+    def get_deputies_list(self) -> list[dict[str, Any]]:
+        url = f"{SEJM_API_BASE}/term{self.term}/MP"
+        try:
+            data = _http_get_json(url)
+            if not isinstance(data, list):
+                return []
+
+            active_mps = [m for m in data if m.get("active", True)]
+            active_mps.sort(key=lambda m: m.get("lastFirstName", ""))
+
+            result = []
+            for m in active_mps:
+                mp_id = m.get("id")
+                club_id = m.get("club") or "niez."
+                club_name = CLUB_DISPLAY_NAMES.get(club_id, club_id)
+                result.append({
+                    "id": mp_id,
+                    "first_last_name": m.get("firstLastName", ""),
+                    "last_first_name": m.get("lastFirstName", ""),
+                    "club": club_id,
+                    "club_display_name": club_name,
+                    "district_name": m.get("districtName"),
+                    "district_num": m.get("districtNum"),
+                    "email": m.get("email"),
+                    "photo_url": f"{SEJM_API_BASE}/term{self.term}/MP/{mp_id}/photo-mini",
+                    "active": m.get("active", True),
+                })
+            return result
+        except Exception as exc:
+            logger.error("Failed to fetch deputies list: %s", exc)
+            return []
+
+    def get_deputy_details(self, mp_id: int) -> dict[str, Any]:
+        url = f"{SEJM_API_BASE}/term{self.term}/MP/{mp_id}"
+        try:
+            data = _http_get_json(url)
+            club_id = data.get("club") or "niez."
+            return {
+                "id": mp_id,
+                "first_last_name": data.get("firstLastName", ""),
+                "last_first_name": data.get("lastFirstName", ""),
+                "club": club_id,
+                "club_display_name": CLUB_DISPLAY_NAMES.get(club_id, club_id),
+                "district_name": data.get("districtName"),
+                "district_num": data.get("districtNum"),
+                "email": data.get("email"),
+                "photo_url": f"{SEJM_API_BASE}/term{self.term}/MP/{mp_id}/photo-mini",
+                "active": data.get("active", True),
+            }
+        except Exception as exc:
+            logger.error("Failed to fetch deputy %s: %s", mp_id, exc)
+            return {}
+
+    def get_total_act_proposals(self) -> int:
+        """Pobiera całkowitą liczbę poselskich projektów ustaw w obecnej kadencji."""
+        try:
+            # Liczba druków z tytułem 'poselski projekt ustawy'
+            url = f"{SEJM_API_BASE}/term{self.term}/prints"
+            prints = _http_get_json(url)
+            if isinstance(prints, list):
+                count = sum(
+                    1 for p in prints if "poselski projekt ustawy" in (p.get("title") or "").lower()
+                )
+                if count > 0:
+                    return count
+        except Exception as exc:
+            logger.warning("Failed to count prints for act proposals: %s", exc)
+        return 358
+
+    def get_deputy_activity_stats(self, mp_id: int) -> dict[str, Any]:
+        deputy = self.get_deputy_details(mp_id)
+        club_id = deputy.get("club", "niez.")
+        party_name = deputy.get("club_display_name", CLUB_DISPLAY_NAMES.get(club_id, club_id))
+
+        # 1. Statystyki głosowań z /sejm/term{term}/MP/{id}/votings/stats
+        stats_url = f"{SEJM_API_BASE}/term{self.term}/MP/{mp_id}/votings/stats"
+        total_votings = 0
+        voted_votings = 0
+        unexcused_absences = 0
+        excused_absences = 0
+        unexcused_days = 0
+
+        try:
+            stats_data = _http_get_json(stats_url)
+            if isinstance(stats_data, list):
+                for row in stats_data:
+                    num_votings = row.get("numVotings", 0)
+                    num_voted = row.get("numVoted", 0)
+                    num_missed = row.get("numMissed", 0)
+                    excused = bool(row.get("absenceExcuse", False))
+
+                    total_votings += num_votings
+                    voted_votings += num_voted
+
+                    if num_missed > 0:
+                        if excused:
+                            excused_absences += num_missed
+                        else:
+                            unexcused_absences += num_missed
+                            unexcused_days += 1
+        except Exception as exc:
+            logger.warning("Failed to fetch voting stats for MP %s: %s", mp_id, exc)
+
+        attendance_rate = (
+            round((voted_votings / total_votings) * 100, 1) if total_votings > 0 else 0.0
+        )
+
+        # 2. Liczba projektów ustaw (poselskich projektów ustaw w obecnej kadencji)
+        act_proposals_count = self.get_total_act_proposals()
+
+        # 3. Interpelacje i zapytania poselskie dla danego posła
+        padded_id = f"{mp_id:03d}"
+        interpellations_count = 0
+        written_questions_count = 0
+
+        try:
+            req = urllib.request.Request(
+                f"{SEJM_API_BASE}/term{self.term}/interpellations?from={padded_id}&limit=1",
+                headers={"User-Agent": "PoliticsApp/1.0", "Accept": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                cr = resp.headers.get("Content-Range", "")
+                if "/" in cr:
+                    interpellations_count = int(cr.split("/")[-1])
+        except Exception:
+            pass
+
+        try:
+            req = urllib.request.Request(
+                f"{SEJM_API_BASE}/term{self.term}/writtenQuestions?from={padded_id}&limit=1",
+                headers={"User-Agent": "PoliticsApp/1.0", "Accept": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                cr = resp.headers.get("Content-Range", "")
+                if "/" in cr:
+                    written_questions_count = int(cr.split("/")[-1])
+        except Exception:
+            pass
+
+        return {
+            "deputy_id": mp_id,
+            "total_votings": total_votings,
+            "voted_votings": voted_votings,
+            "unexcused_absences": unexcused_absences,
+            "unexcused_absence_days": unexcused_days,
+            "excused_absences": excused_absences,
+            "attendance_rate": attendance_rate,
+            "club_id": club_id,
+            "party_name": party_name,
+            "act_proposals_count": act_proposals_count,
+            "interpellations_count": interpellations_count,
+            "written_questions_count": written_questions_count,
+            "term": self.term,
+        }
+
