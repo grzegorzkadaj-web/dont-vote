@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 const buildApiUrl = (path: string): string =>
@@ -18,6 +18,7 @@ const categoryLabels: Record<ContactCategory, string> = {
 };
 
 export default function KontaktPage() {
+  const formRef = useRef<HTMLFormElement>(null);
   const [email, setEmail] = useState("");
   const [category, setCategory] = useState<ContactCategory>("pytanie");
   const [message, setMessage] = useState("");
@@ -27,12 +28,18 @@ export default function KontaktPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isFormValid, setIsFormValid] = useState(false);
 
-  const canSubmit =
-    email.trim().length >= 5 &&
-    message.trim().length >= 10 &&
-    rodoConsent &&
-    !submitting;
+  const updateFormValidity = useCallback(() => {
+    setIsFormValid(formRef.current?.checkValidity() ?? false);
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(updateFormValidity, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [updateFormValidity]);
+
+  const canSubmit = isFormValid && !submitting;
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -67,6 +74,7 @@ export default function KontaktPage() {
       setMessage("");
       setRodoConsent(false);
       setCategory("pytanie");
+      setIsFormValid(false);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Nieznany błąd podczas wysyłania."
@@ -102,7 +110,13 @@ export default function KontaktPage() {
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="contact-form">
+        <form
+          ref={formRef}
+          onSubmit={onSubmit}
+          onInput={updateFormValidity}
+          onChange={updateFormValidity}
+          className="contact-form"
+        >
           <label className="form-field">
             <span className="form-label">
               Adres e-mail <span className="required">*</span>

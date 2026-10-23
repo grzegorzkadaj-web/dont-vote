@@ -162,3 +162,4 @@ node_modules/
 out/
 *.db
 *.sqlite
+ADMIN_INSTRUCTIONS.md

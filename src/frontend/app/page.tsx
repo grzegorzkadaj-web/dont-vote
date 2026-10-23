@@ -1475,7 +1475,7 @@ export default function HomePage() {
               {dossierLoading && (
                 <div className="deputy-detail-loading">
                   <div className="loading-spinner" aria-hidden />
-                  <p>Generuję dossier parlamentarzysty (statystyki Sejmu + Tavily)...</p>
+                  <p>Generuję dossier parlamentarzysty (statystyki Sejmu + Internet)...</p>
                 </div>
               )}
 
