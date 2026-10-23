@@ -8,7 +8,12 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.backend.config import settings
-from src.backend.database import init_db, save_contact_submission
+from src.backend.database import (
+    get_all_politician_positions,
+    get_politician_position_by_id,
+    init_db,
+    save_contact_submission,
+)
 from src.backend.parties import PARTY_CONFIGS, load_calculated_positions
 from src.backend.rag import RAGService
 from src.backend.schemas import (
@@ -22,6 +27,7 @@ from src.backend.schemas import (
     DeputyPublicInfo,
     FeedbackRequest,
     PartyOverview,
+    PoliticianPosition,
     VotingsSearchRequest,
     VotingsSearchResponse,
 )
@@ -206,6 +212,31 @@ def get_deputy_dossier(deputy_id: int) -> DeputyDossierResponse:
         activity_stats=activity_stats,
         public_info=public_info,
     )
+
+
+@app.get("/api/politicians/positions", response_model=list[PoliticianPosition])
+def list_politician_positions() -> list[PoliticianPosition]:
+    """Zwraca obliczone i zapisane w bazie danych pozycje polityków na scenie politycznej."""
+    try:
+        positions = get_all_politician_positions()
+        return [PoliticianPosition(**p) for p in positions]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Błąd pobierania pozycji polityków z bazy danych: {exc}",
+        ) from exc
+
+
+@app.get("/api/politicians/{deputy_id}/position", response_model=PoliticianPosition)
+def get_politician_position(deputy_id: int) -> PoliticianPosition:
+    """Zwraca pozycję i szczegóły głosowań pojedynczego polityka."""
+    pos = get_politician_position_by_id(deputy_id)
+    if not pos:
+        raise HTTPException(
+            status_code=404,
+            detail="Brak obliczonej pozycji dla tego posła w bazie danych.",
+        )
+    return PoliticianPosition(**pos)
 
 
 @app.post("/api/contact", response_model=ContactSubmissionResponse)

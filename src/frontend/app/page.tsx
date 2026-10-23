@@ -139,7 +139,35 @@ type DeputyDossierResponse = {
   public_info: DeputyPublicInfo;
 };
 
-type TabKey = "position" | "question" | "poll" | "votings" | "dossier";
+type PoliticianVotingDetail = {
+  sitting: number;
+  voting_number: number;
+  short_title: string;
+  category: string;
+  axis: "x" | "y";
+  vote: "YES" | "NO" | "ABSTAIN" | "ABSENT" | string;
+  vote_label: string;
+  impact: string;
+  description: string;
+};
+
+type PoliticianPosition = {
+  deputy_id: number;
+  first_last_name: string;
+  club: string;
+  club_display_name: string;
+  photo_url: string;
+  axis_x: number;
+  axis_y: number;
+  axis_label: string;
+  summary: string;
+  economic_description: string;
+  worldview_description: string;
+  voting_details: PoliticianVotingDetail[];
+  calculated_at: string;
+};
+
+type TabKey = "position" | "politicians" | "question" | "poll" | "votings" | "dossier";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -240,6 +268,52 @@ export default function HomePage() {
   const [dossierLoading, setDossierLoading] = useState(false);
   const [dossierError, setDossierError] = useState<string | null>(null);
   const [dossierData, setDossierData] = useState<DeputyDossierResponse | null>(null);
+
+  // Politician positions state
+  const [politicians, setPoliticians] = useState<PoliticianPosition[]>([]);
+  const [politiciansLoading, setPoliticiansLoading] = useState(false);
+  const [politiciansError, setPoliticiansError] = useState<string | null>(null);
+  const [selectedPoliticianIds, setSelectedPoliticianIds] = useState<number[]>([]);
+  const [politicianSearchQuery, setPoliticianSearchQuery] = useState("");
+  const [politicianClubFilter, setPoliticianClubFilter] = useState<string>("ALL");
+  const [expandedVotingDetailsMpId, setExpandedVotingDetailsMpId] = useState<number | null>(null);
+
+  const loadPoliticianPositions = async () => {
+    if (politicians.length > 0 || politiciansLoading) return;
+    setPoliticiansLoading(true);
+    setPoliticiansError(null);
+    try {
+      const response = await fetch(buildApiUrl("/api/politicians/positions"));
+      if (!response.ok) {
+        throw new Error("Nie udało się pobrać pozycji polityków z bazy danych.");
+      }
+      const data = (await response.json()) as PoliticianPosition[];
+      setPoliticians(data);
+      // Domyślnie zaznacz kilku charakterystycznych liderów z różnych formacji
+      const defaultLeaderNames = [
+        "Donald Tusk",
+        "Jarosław Kaczyński",
+        "Krzysztof Bosak",
+        "Adrian Zandberg",
+        "Władysław Kosiniak-Kamysz",
+        "Szymon Hołownia"
+      ];
+      const defaultIds = data
+        .filter((p) => defaultLeaderNames.includes(p.first_last_name))
+        .map((p) => p.deputy_id);
+      setSelectedPoliticianIds(defaultIds.length > 0 ? defaultIds : data.slice(0, 5).map((p) => p.deputy_id));
+    } catch (err) {
+      setPoliticiansError(err instanceof Error ? err.message : "Błąd ładowania pozycji polityków.");
+    } finally {
+      setPoliticiansLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "politicians") {
+      void loadPoliticianPositions();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     void fetch(buildApiUrl("/api/parties"))
@@ -483,6 +557,52 @@ export default function HomePage() {
     });
   }, [deputies, deputySearchQuery, selectedClubFilter]);
 
+  const togglePoliticianSelection = (id: number) => {
+    setSelectedPoliticianIds((prev) =>
+      prev.includes(id) ? prev.filter((pId) => pId !== id) : [...prev, id]
+    );
+  };
+
+  const selectAllFilteredPoliticians = () => {
+    const idsToAdd = filteredPoliticians.map((p) => p.deputy_id);
+    setSelectedPoliticianIds((prev) => Array.from(new Set([...prev, ...idsToAdd])));
+  };
+
+  const deselectAllPoliticians = () => {
+    setSelectedPoliticianIds([]);
+  };
+
+  const uniquePoliticianClubs = useMemo(() => {
+    const clubMap = new Map<string, string>();
+    for (const p of politicians) {
+      if (p.club && !clubMap.has(p.club)) {
+        clubMap.set(p.club, p.club_display_name || p.club);
+      }
+    }
+    return Array.from(clubMap.entries()).map(([club, displayName]) => ({
+      club,
+      displayName
+    }));
+  }, [politicians]);
+
+  const filteredPoliticians = useMemo(() => {
+    const query = politicianSearchQuery.trim().toLowerCase();
+    return politicians.filter((p) => {
+      const matchesClub = politicianClubFilter === "ALL" || p.club === politicianClubFilter;
+      if (!matchesClub) return false;
+      if (!query) return true;
+      const fullName = p.first_last_name.toLowerCase();
+      const clubName = (p.club_display_name || p.club).toLowerCase();
+      const label = (p.axis_label || "").toLowerCase();
+      return fullName.includes(query) || clubName.includes(query) || label.includes(query);
+    });
+  }, [politicians, politicianSearchQuery, politicianClubFilter]);
+
+  const selectedPoliticiansList = useMemo(() => {
+    const idSet = new Set(selectedPoliticianIds);
+    return politicians.filter((p) => idSet.has(p.deputy_id));
+  }, [politicians, selectedPoliticianIds]);
+
   const politicalSceneChart = (
     <>
       <p className="muted axis-legend">
@@ -554,6 +674,15 @@ export default function HomePage() {
           <button
             type="button"
             role="tab"
+            aria-selected={activeTab === "politicians"}
+            className={`tab-button ${activeTab === "politicians" ? "active" : ""}`}
+            onClick={() => setActiveTab("politicians")}
+          >
+            Pozycja polityka na scenie politycznej
+          </button>
+          <button
+            type="button"
+            role="tab"
             aria-selected={activeTab === "question"}
             className={`tab-button ${activeTab === "question" ? "active" : ""}`}
             onClick={() => setActiveTab("question")}
@@ -605,6 +734,286 @@ export default function HomePage() {
               </article>
             ))}
           </div>
+        </section>
+      )}
+
+      {activeTab === "politicians" && (
+        <section className="card section-card">
+          <div className="section-header-block">
+            <h2>Pozycja polityka na scenie politycznej</h2>
+            <p className="muted">
+              Wizualizacja rzeczywistych poglądów posłów na podstawie ich imiennych głosowań w Sejmie X kadencji.
+              Wybierz posłów z poniższej listy za pomocą checkboxa, aby nanieść ich na mapę i porównać ich położenie.
+            </p>
+          </div>
+
+          {politiciansError && (
+            <div className="error-card" style={{ marginBottom: "16px" }}>
+              <strong>Błąd:</strong> {politiciansError}
+            </div>
+          )}
+
+          {/* Wykres dla wybranych polityków */}
+          <div className="politician-map-wrapper">
+            <p className="muted axis-legend">
+              Oś X: poglądy gospodarczo-społeczne (lewicowe → wolnorynkowe). Oś Y: poglądy światopoglądowe
+              (progresywne → konserwatywne).
+            </p>
+            <div className="party-map politician-map">
+              <span className="axis-label axis-label-x-left">Lewica gospodarcza / socjalna</span>
+              <span className="axis-label axis-label-x-right">Prawica gospodarcza / wolny rynek</span>
+              <span className="axis-label axis-label-y-top">Konserwatyzm światopoglądowy</span>
+              <span className="axis-label axis-label-y-bottom">Progresywność światopoglądowa</span>
+              <div className="axis-x" />
+              <div className="axis-y" />
+
+              {/* Tło - orientacyjne kropki partii w tle */}
+              {parties.map((party) => (
+                <span
+                  key={`bg-party-${party.key}`}
+                  className="party-dot bg-party-dot"
+                  style={{
+                    left: `${(party.axis_x + 1) * 50}%`,
+                    top: `${(1 - (party.axis_y + 1) * 0.5) * 100}%`
+                  }}
+                  title={`Partia: ${party.display_name}`}
+                >
+                  {party.display_name}
+                </span>
+              ))}
+
+              {/* Kropki zaznaczonych posłów */}
+              {selectedPoliticiansList.map((pol) => {
+                const posX = (pol.axis_x + 1) * 50;
+                const posY = (1 - (pol.axis_y + 1) * 0.5) * 100;
+                return (
+                  <div
+                    key={`map-pol-${pol.deputy_id}`}
+                    className="politician-dot"
+                    style={{
+                      left: `${posX}%`,
+                      top: `${posY}%`
+                    }}
+                    title={`${pol.first_last_name} (${pol.club}) - ${pol.axis_label}\nX: ${pol.axis_x.toFixed(2)}, Y: ${pol.axis_y.toFixed(2)}`}
+                  >
+                    {pol.photo_url ? (
+                      <img
+                        src={pol.photo_url}
+                        alt={pol.first_last_name}
+                        className="politician-dot-avatar"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <div className="politician-dot-fallback">{pol.first_last_name.slice(0, 2)}</div>
+                    )}
+                    <span className="politician-dot-name">{pol.first_last_name}</span>
+                  </div>
+                );
+              })}
+
+              {selectedPoliticiansList.length === 0 && !politiciansLoading && (
+                <div className="map-empty-hint">
+                  Zaznacz posłów na poniższej liście, aby zobaczyć ich pozycję na wykresie.
+                </div>
+              )}
+            </div>
+            <div className="chart-legend-row">
+              <span className="legend-chip">
+                Wybrani posłowie: <strong>{selectedPoliticiansList.length}</strong>
+              </span>
+              <span className="legend-chip muted-chip">
+                W tle wyświetlane są referencyjne punkty głównych partii
+              </span>
+            </div>
+          </div>
+
+          {/* Pasek narzędzi i filtry listy */}
+          <div className="politicians-toolbar">
+            <div className="search-and-filter-row">
+              <input
+                type="text"
+                placeholder="Szukaj posła po nazwisku, klubie..."
+                value={politicianSearchQuery}
+                onChange={(e) => setPoliticianSearchQuery(e.target.value)}
+                className="dossier-search-input"
+              />
+              <select
+                value={politicianClubFilter}
+                onChange={(e) => setPoliticianClubFilter(e.target.value)}
+                className="club-filter-select"
+              >
+                <option value="ALL">Wszystkie kluby i koła ({politicians.length})</option>
+                {uniquePoliticianClubs.map(({ club, displayName }) => (
+                  <option key={club} value={club}>
+                    {club} — {displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="selection-actions-row">
+              <button
+                type="button"
+                className="secondary btn-sm"
+                onClick={selectAllFilteredPoliticians}
+              >
+                Zaznacz widocznych ({filteredPoliticians.length})
+              </button>
+              <button
+                type="button"
+                className="secondary btn-sm"
+                onClick={deselectAllPoliticians}
+                disabled={selectedPoliticianIds.length === 0}
+              >
+                Odznacz wszystkich
+              </button>
+              <span className="toolbar-counter">
+                Pokazano {filteredPoliticians.length} z {politicians.length} posłów
+              </span>
+            </div>
+          </div>
+
+          {/* Lista polityków z checkboxem, opisem i szczegółami głosowań */}
+          {politiciansLoading ? (
+            <div className="loading-state">
+              <div className="spinner" />
+              <p>Ładowanie danych posłów i analizy głosowań...</p>
+            </div>
+          ) : (
+            <div className="politicians-list">
+              {filteredPoliticians.map((pol) => {
+                const isSelected = selectedPoliticianIds.includes(pol.deputy_id);
+                const isExpanded = expandedVotingDetailsMpId === pol.deputy_id;
+
+                return (
+                  <article
+                    key={`pol-card-${pol.deputy_id}`}
+                    className={`politician-card ${isSelected ? "politician-card-selected" : ""}`}
+                  >
+                    <div className="politician-card-header">
+                      <label className="politician-checkbox-label" title="Zaznacz, aby dodać na wykres">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => togglePoliticianSelection(pol.deputy_id)}
+                          className="politician-checkbox"
+                        />
+                        <span className="checkbox-custom-ui" />
+                      </label>
+
+                      <div className="politician-avatar-wrap">
+                        {pol.photo_url ? (
+                          <img
+                            src={pol.photo_url}
+                            alt={pol.first_last_name}
+                            className="politician-avatar"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="politician-avatar-fallback">
+                            {pol.first_last_name.slice(0, 2)}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="politician-info">
+                        <div className="politician-title-row">
+                          <h3 className="politician-name">{pol.first_last_name}</h3>
+                          <span className="politician-club-badge" title={pol.club_display_name}>
+                            {pol.club}
+                          </span>
+                          <span className="politician-axis-badge">
+                            {pol.axis_label}
+                          </span>
+                        </div>
+                        <div className="politician-coords-row">
+                          <span className="coord-chip">
+                            Gospodarka (X): <strong>{pol.axis_x > 0 ? `+${pol.axis_x.toFixed(2)}` : pol.axis_x.toFixed(2)}</strong>
+                          </span>
+                          <span className="coord-chip">
+                            Światopogląd (Y): <strong>{pol.axis_y > 0 ? `+${pol.axis_y.toFixed(2)}` : pol.axis_y.toFixed(2)}</strong>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Dlaczego lewica / prawica - opis oceny oparty na głosowaniach */}
+                    <div className="politician-justification">
+                      <p className="politician-summary-text">{pol.summary}</p>
+                      <div className="politician-axis-breakdown-box">
+                        <div className="breakdown-item">
+                          <span className="breakdown-title">Oś gospodarcza:</span>
+                          <span className="breakdown-desc">{pol.economic_description}</span>
+                        </div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-title">Oś światopoglądowa:</span>
+                          <span className="breakdown-desc">{pol.worldview_description}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Przycisk rozwijania szczegółów głosowań */}
+                    <div className="politician-actions-footer">
+                      <button
+                        type="button"
+                        className="toggle-voting-details-btn"
+                        onClick={() =>
+                          setExpandedVotingDetailsMpId(isExpanded ? null : pol.deputy_id)
+                        }
+                      >
+                        {isExpanded ? "▲ Ukryj szczegóły głosowań w Sejmie" : "▼ Zobacz szczegóły głosowań w Sejmie (" + (pol.voting_details?.length || 0) + ")"}
+                      </button>
+                    </div>
+
+                    {/* Tabela szczegółów głosowań posła z Sejm API */}
+                    {isExpanded && pol.voting_details && (
+                      <div className="politician-voting-details-drawer">
+                        <h4 className="details-header">
+                          Rzeczywiste imienne decyzje posła w głosowaniach Sejmu X kadencji:
+                        </h4>
+                        <div className="voting-details-grid">
+                          {pol.voting_details.map((vd, idx) => {
+                            let voteBadgeClass = "badge-absent";
+                            let voteText = "Nieobecny";
+                            if (vd.vote === "YES") {
+                              voteBadgeClass = "badge-yes";
+                              voteText = "ZA";
+                            } else if (vd.vote === "NO") {
+                              voteBadgeClass = "badge-no";
+                              voteText = "PRZECIW";
+                            } else if (vd.vote === "ABSTAIN") {
+                              voteBadgeClass = "badge-abstain";
+                              voteText = "WSTRZYMAŁ SIĘ";
+                            }
+
+                            return (
+                              <div key={`vd-${idx}`} className="voting-detail-card">
+                                <div className="detail-top">
+                                  <span className="voting-tag category-tag">{vd.category}</span>
+                                  <span className={`voting-vote-badge ${voteBadgeClass}`}>
+                                    {voteText}
+                                  </span>
+                                </div>
+                                <div className="voting-title">{vd.short_title}</div>
+                                <div className="voting-desc muted">{vd.description}</div>
+                                <div className="voting-impact">
+                                  <strong>Wpływ na ocenę:</strong> {vd.impact}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 

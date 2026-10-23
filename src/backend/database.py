@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,136 @@ def init_db(custom_path: str | Path | None = None) -> None:
                     user_agent TEXT
                 )
                 """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS politician_positions (
+                    deputy_id INTEGER PRIMARY KEY,
+                    first_last_name TEXT NOT NULL,
+                    club TEXT NOT NULL,
+                    club_display_name TEXT NOT NULL,
+                    photo_url TEXT NOT NULL,
+                    axis_x REAL NOT NULL,
+                    axis_y REAL NOT NULL,
+                    axis_label TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    economic_description TEXT NOT NULL,
+                    worldview_description TEXT NOT NULL,
+                    voting_details_json TEXT NOT NULL,
+                    calculated_at TEXT NOT NULL
+                )
+                """)
+    finally:
+        conn.close()
+
+
+def save_politician_positions(
+    positions: list[dict[str, Any]], custom_path: str | Path | None = None
+) -> None:
+    init_db(custom_path)
+    db_file = get_db_path(custom_path)
+
+    conn = sqlite3.connect(db_file)
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.executemany(
+                """
+                INSERT OR REPLACE INTO politician_positions (
+                    deputy_id, first_last_name, club, club_display_name, photo_url,
+                    axis_x, axis_y, axis_label, summary,
+                    economic_description, worldview_description,
+                    voting_details_json, calculated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        p["deputy_id"],
+                        p["first_last_name"],
+                        p["club"],
+                        p["club_display_name"],
+                        p["photo_url"],
+                        float(p["axis_x"]),
+                        float(p["axis_y"]),
+                        p["axis_label"],
+                        p["summary"],
+                        p.get("economic_description", ""),
+                        p.get("worldview_description", ""),
+                        json.dumps(p.get("voting_details", []), ensure_ascii=False)
+                        if isinstance(p.get("voting_details"), list)
+                        else p.get("voting_details_json", "[]"),
+                        p["calculated_at"],
+                    )
+                    for p in positions
+                ],
+            )
+    finally:
+        conn.close()
+
+
+def get_all_politician_positions(
+    custom_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    init_db(custom_path)
+    db_file = get_db_path(custom_path)
+
+    conn = sqlite3.connect(db_file)
+    try:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT deputy_id, first_last_name, club, club_display_name, photo_url,
+                   axis_x, axis_y, axis_label, summary,
+                   economic_description, worldview_description,
+                   voting_details_json, calculated_at
+            FROM politician_positions
+            ORDER BY first_last_name ASC
+            """
+        )
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            try:
+                d["voting_details"] = json.loads(d.pop("voting_details_json"))
+            except Exception:
+                d["voting_details"] = []
+            result.append(d)
+        return result
+    finally:
+        conn.close()
+
+
+def get_politician_position_by_id(
+    deputy_id: int, custom_path: str | Path | None = None
+) -> dict[str, Any] | None:
+    init_db(custom_path)
+    db_file = get_db_path(custom_path)
+
+    conn = sqlite3.connect(db_file)
+    try:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT deputy_id, first_last_name, club, club_display_name, photo_url,
+                   axis_x, axis_y, axis_label, summary,
+                   economic_description, worldview_description,
+                   voting_details_json, calculated_at
+            FROM politician_positions
+            WHERE deputy_id = ?
+            """,
+            (deputy_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        try:
+            d["voting_details"] = json.loads(d.pop("voting_details_json"))
+        except Exception:
+            d["voting_details"] = []
+        return d
     finally:
         conn.close()
 

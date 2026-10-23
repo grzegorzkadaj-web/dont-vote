@@ -153,3 +153,32 @@ class DeputyDossierResponse(BaseModel):
     activity_stats: DeputyActivityStats
     public_info: DeputyPublicInfo
 
+
+class PoliticianVotingDetail(BaseModel):
+    sitting: int
+    voting_number: int
+    short_title: str
+    category: str
+    axis: str  # "x" or "y"
+    vote: str  # "YES", "NO", "ABSTAIN", "ABSENT"
+    vote_label: str  # "Za", "Przeciw", "Wstrzymał się", "Nieobecny"
+    impact: str  # "lewicowy", "prawicowy", "konserwatywny", "progresywny", etc.
+    description: str
+
+
+class PoliticianPosition(BaseModel):
+    deputy_id: int
+    first_last_name: str
+    club: str
+    club_display_name: str
+    photo_url: str
+    axis_x: float
+    axis_y: float
+    axis_label: str
+    summary: str
+    economic_description: str
+    worldview_description: str
+    voting_details: list[PoliticianVotingDetail] = Field(default_factory=list)
+    calculated_at: str
+
+

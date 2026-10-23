@@ -78,7 +78,7 @@ TOPIC_SYNONYMS: dict[str, list[str]] = {
 }
 
 
-def _http_get_json(url: str, timeout: float = 8.0) -> Any:
+def _http_get_json(url: str, timeout: float = 20.0, max_retries: int = 3) -> Any:
     req = urllib.request.Request(
         url,
         headers={
@@ -86,8 +86,14 @@ def _http_get_json(url: str, timeout: float = 8.0) -> Any:
             "Accept": "application/json",
         },
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    last_err = None
+    for attempt in range(max_retries):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            last_err = exc
+    raise last_err
 
 
 def expand_search_terms(query: str) -> list[str]:
