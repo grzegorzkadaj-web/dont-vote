@@ -219,6 +219,12 @@ def list_politician_positions() -> list[PoliticianPosition]:
     """Zwraca obliczone i zapisane w bazie danych pozycje polityków na scenie politycznej."""
     try:
         positions = get_all_politician_positions()
+        if not positions:
+            # Auto-populate first time so the frontend tab is not empty on fresh deployments.
+            from calculate_politician_positions import calculate_and_store_all_politicians
+
+            calculate_and_store_all_politicians(use_ai=False)
+            positions = get_all_politician_positions()
         return [PoliticianPosition(**p) for p in positions]
     except Exception as exc:
         raise HTTPException(
