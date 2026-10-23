@@ -3,6 +3,9 @@ import os
 from typing import Any
 
 from langchain_core.documents import Document
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +120,7 @@ class TavilyDeputyService:
     def __init__(self, max_results: int = 5) -> None:
         self.max_results = max_results
         self._search_tool = None
+        self._answer_rewriter = None
         if TavilySearch is not None:
             try:
                 from src.backend.config import settings
@@ -132,15 +136,44 @@ class TavilyDeputyService:
                     self._search_tool = TavilySearch(
                         max_results=self.max_results, include_answer=True
                     )
+                self._answer_rewriter = (
+                    ChatPromptTemplate.from_template(
+                        """Przepisz poniższą odpowiedź po polsku.
+Zachowaj fakty i sens, nie dodawaj nowych informacji.
+Zwróć wyłącznie treść odpowiedzi.
+
+Odpowiedź:
+{answer}"""
+                    )
+                    | ChatOpenAI(model=settings.chat_model, temperature=0)
+                    | StrOutputParser()
+                )
             except Exception as exc:
                 logger.warning("Failed to initialize TavilySearch: %s", exc)
+
+    def _rewrite_answer_to_polish(self, answer: Any) -> str | None:
+        if not isinstance(answer, str):
+            return None
+        answer_text = answer.strip()
+        if not answer_text:
+            return None
+        if self._answer_rewriter is None:
+            return answer_text
+
+        try:
+            rewritten = self._answer_rewriter.invoke({"answer": answer_text})
+            if isinstance(rewritten, str) and rewritten.strip():
+                return rewritten.strip()
+        except Exception as exc:
+            logger.warning("Błąd przepisywania odpowiedzi Tavily po polsku: %s", exc)
+        return answer_text
 
     def search_deputy_public_info(
         self, deputy_name: str, party_name: str | None = None
     ) -> dict[str, Any]:
         """Wyszukuje informacje publiczne o pośle za pomocą Tavily."""
         query = (
-            f"{deputy_name} poseł {party_name or ''} Sejm działalność polityczna"
+            f"{deputy_name} poseł {party_name or ''} Sejm działalność polityczna. Odpowiedz po polsku."
         ).strip()
 
         if self._search_tool is None:
@@ -155,7 +188,7 @@ class TavilyDeputyService:
             if not isinstance(res, dict):
                 return {"query": query, "answer": None, "sources": []}
 
-            answer = res.get("answer")
+            answer = self._rewrite_answer_to_polish(res.get("answer"))
             raw_results = res.get("results") or []
             sources = []
             for item in raw_results:
@@ -179,4 +212,3 @@ class TavilyDeputyService:
                 "answer": f"Wystąpił błąd podczas pobierania informacji z Tavily: {exc}",
                 "sources": [],
             }
-
