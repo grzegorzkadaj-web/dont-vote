@@ -1,7 +1,7 @@
 # Politics RAG Web App
 
 Web application to compare Polish political parties' programmes with a RAG architecture:
-- **Vector DB**: Pinecone (separate index per party)
+- **Vector DB**: Chroma (separate index per party)
 - **Backend**: FastAPI + LangChain + OpenAI + Pinecone
 - **Frontend**: Next.js
 
