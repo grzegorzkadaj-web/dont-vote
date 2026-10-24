@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain_core.documents import Document
@@ -193,12 +194,14 @@ Odpowiedź:
             sources = []
             for item in raw_results:
                 if isinstance(item, dict):
-                    sources.append({
-                        "title": item.get("title") or "Brak tytułu",
-                        "url": item.get("url") or "",
-                        "snippet": item.get("content") or "",
-                        "score": item.get("score"),
-                    })
+                    sources.append(
+                        {
+                            "title": item.get("title") or "Brak tytułu",
+                            "url": item.get("url") or "",
+                            "snippet": item.get("content") or "",
+                            "score": item.get("score"),
+                        }
+                    )
 
             return {
                 "query": query,
@@ -212,3 +215,88 @@ Odpowiedź:
                 "answer": f"Wystąpił błąd podczas pobierania informacji z Tavily: {exc}",
                 "sources": [],
             }
+
+    @staticmethod
+    def _parse_published_at(raw_result: dict[str, Any]) -> str | None:
+        date_candidates = (
+            raw_result.get("published_date"),
+            raw_result.get("published"),
+            raw_result.get("date"),
+        )
+        for candidate in date_candidates:
+            if not isinstance(candidate, str):
+                continue
+            value = candidate.strip()
+            if not value:
+                continue
+            normalized = value.replace("Z", "+00:00")
+            try:
+                parsed = datetime.fromisoformat(normalized)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                return parsed.astimezone(timezone.utc).isoformat()
+            except ValueError:
+                if len(value) >= 10:
+                    return value
+        return None
+
+    @staticmethod
+    def _sort_key_by_newest(item: dict[str, Any]) -> tuple[int, float, float]:
+        published_at = item.get("published_at")
+        if isinstance(published_at, str) and published_at:
+            try:
+                timestamp = datetime.fromisoformat(
+                    published_at.replace("Z", "+00:00")
+                ).timestamp()
+                return (1, timestamp, float(item.get("score") or 0.0))
+            except ValueError:
+                pass
+        return (0, 0.0, float(item.get("score") or 0.0))
+
+    def search_deputy_opinion_findings(
+        self,
+        deputy_name: str,
+        deputy_id: int,
+        deputy_club: str,
+        question: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if self._search_tool is None:
+            return []
+
+        query = (
+            f"{deputy_name} {question}. Znajdź wypowiedzi polityka, cytaty i artykuły."
+        ).strip()
+        try:
+            response = self._search_tool.invoke(
+                query, topic="news", search_depth="advanced"
+            )
+            if not isinstance(response, dict):
+                return []
+            raw_results = response.get("results") or []
+            findings: list[dict[str, Any]] = []
+            for item in raw_results:
+                if not isinstance(item, dict):
+                    continue
+                findings.append(
+                    {
+                        "deputy_id": deputy_id,
+                        "deputy_name": deputy_name,
+                        "deputy_club": deputy_club,
+                        "title": item.get("title") or "Brak tytułu",
+                        "url": item.get("url") or "",
+                        "snippet": item.get("content") or "",
+                        "published_at": self._parse_published_at(item),
+                        "score": item.get("score"),
+                    }
+                )
+            findings.sort(key=self._sort_key_by_newest, reverse=True)
+            return findings[:limit]
+        except Exception as exc:
+            logger.warning(
+                "Błąd wyszukiwania opinii Tavily dla '%s' i pytania '%s': %s",
+                deputy_name,
+                question,
+                exc,
+            )
+            return []

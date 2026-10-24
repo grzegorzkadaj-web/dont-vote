@@ -215,6 +215,20 @@ p {
   margin-bottom: 10px;
 }
 
+input[type="text"] {
+  width: 100%;
+  border: 1px solid #cfd7e3;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  color: inherit;
+}
+
+input[type="text"]:focus {
+  outline: 3px solid rgba(29, 78, 216, 0.2);
+  border-color: var(--primary);
+}
+
 textarea {
   width: 100%;
   min-height: 112px;
@@ -257,6 +271,29 @@ button.secondary {
 button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.politicians-opinions-form {
+  display: grid;
+  gap: 12px;
+}
+
+.opinion-deputies-list {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  background: var(--surface-soft);
+}
+
+.opinion-deputy-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
 }
 
 .party-map {
@@ -2102,5 +2139,4 @@ button:disabled {
   padding: 4px 8px;
   border-radius: 0 4px 4px 0;
 }
-
 

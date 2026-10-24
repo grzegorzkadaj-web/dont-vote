@@ -139,6 +139,23 @@ type DeputyDossierResponse = {
   public_info: DeputyPublicInfo;
 };
 
+type PoliticianOpinionFinding = {
+  deputy_id: number;
+  deputy_name: string;
+  deputy_club: string;
+  title: string;
+  url: string;
+  snippet: string;
+  published_at: string | null;
+  score: number | null;
+};
+
+type PoliticiansOpinionResponse = {
+  question: string;
+  findings_count: number;
+  findings: PoliticianOpinionFinding[];
+};
+
 type PoliticianVotingDetail = {
   sitting: number;
   voting_number: number;
@@ -167,7 +184,7 @@ type PoliticianPosition = {
   calculated_at: string;
 };
 
-type TabKey = "position" | "politicians" | "question" | "poll" | "votings" | "dossier";
+type TabKey = "position" | "politicians" | "question" | "poll" | "votings" | "dossier" | "politicians-opinions";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -268,6 +285,13 @@ export default function HomePage() {
   const [dossierLoading, setDossierLoading] = useState(false);
   const [dossierError, setDossierError] = useState<string | null>(null);
   const [dossierData, setDossierData] = useState<DeputyDossierResponse | null>(null);
+  const [opinionQuestion, setOpinionQuestion] = useState("Co polityk sądzi o podatkach?");
+  const [opinionSearchQuery, setOpinionSearchQuery] = useState("");
+  const [opinionSelectedClubFilter, setOpinionSelectedClubFilter] = useState<string>("ALL");
+  const [opinionSelectedDeputyIds, setOpinionSelectedDeputyIds] = useState<number[]>([]);
+  const [opinionsLoading, setOpinionsLoading] = useState(false);
+  const [opinionsError, setOpinionsError] = useState<string | null>(null);
+  const [opinionsResult, setOpinionsResult] = useState<PoliticiansOpinionResponse | null>(null);
 
   // Politician positions state
   const [politicians, setPoliticians] = useState<PoliticianPosition[]>([]);
@@ -521,8 +545,38 @@ export default function HomePage() {
     }
   };
 
+  const runPoliticiansOpinionsSearch = async (event: FormEvent) => {
+    event.preventDefault();
+    if (opinionQuestion.trim().length < 5 || opinionSelectedDeputyIds.length === 0) return;
+
+    setOpinionsLoading(true);
+    setOpinionsError(null);
+    setOpinionsResult(null);
+    try {
+      const response = await fetch(buildApiUrl("/api/politicians/opinions/search"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: opinionQuestion.trim(),
+          deputy_ids: opinionSelectedDeputyIds,
+          limit_per_deputy: 3
+        })
+      });
+      if (!response.ok) {
+        const details = await response.text();
+        throw new Error(`Błąd wyszukiwania opinii: ${details}`);
+      }
+      const data = (await response.json()) as PoliticiansOpinionResponse;
+      setOpinionsResult(data);
+    } catch (err) {
+      setOpinionsError(err instanceof Error ? err.message : "Nieznany błąd podczas wyszukiwania opinii.");
+    } finally {
+      setOpinionsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (activeTab === "dossier") {
+    if (activeTab === "dossier" || activeTab === "politicians-opinions") {
       void loadDeputiesList();
     }
   }, [activeTab]);
@@ -556,6 +610,32 @@ export default function HomePage() {
       );
     });
   }, [deputies, deputySearchQuery, selectedClubFilter]);
+
+  const filteredOpinionDeputies = useMemo(() => {
+    const query = opinionSearchQuery.trim().toLowerCase();
+    return deputies.filter((d) => {
+      const matchesClub =
+        opinionSelectedClubFilter === "ALL" || d.club === opinionSelectedClubFilter;
+      if (!matchesClub) return false;
+      if (!query) return true;
+      const fullName = d.first_last_name.toLowerCase();
+      const clubName = (d.club_display_name || d.club).toLowerCase();
+      const district = (d.district_name || "").toLowerCase();
+      return (
+        fullName.includes(query) ||
+        clubName.includes(query) ||
+        district.includes(query)
+      );
+    });
+  }, [deputies, opinionSearchQuery, opinionSelectedClubFilter]);
+
+  const toggleOpinionDeputySelection = (deputyId: number) => {
+    setOpinionSelectedDeputyIds((prev) =>
+      prev.includes(deputyId)
+        ? prev.filter((id) => id !== deputyId)
+        : [...prev, deputyId]
+    );
+  };
 
   const togglePoliticianSelection = (id: number) => {
     setSelectedPoliticianIds((prev) =>
@@ -706,6 +786,15 @@ export default function HomePage() {
             onClick={() => setActiveTab("votings")}
           >
             Głosowania
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "politicians-opinions"}
+            className={`tab-button ${activeTab === "politicians-opinions" ? "active" : ""}`}
+            onClick={() => setActiveTab("politicians-opinions")}
+          >
+            Politycy o...
           </button>
           <button
             type="button"
@@ -1354,6 +1443,135 @@ export default function HomePage() {
                           </div>
                         </div>
                       )}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === "politicians-opinions" && (
+        <section className="card section-card">
+          <h2>Politycy o...</h2>
+          <p className="muted">
+            Zadaj pytanie i wybierz posłów. Wyszukamy ich wypowiedzi oraz materiały z mediów przez Tavily.
+            Jeśli źródło ma datę publikacji, wyniki są sortowane od najnowszych.
+          </p>
+
+          <form onSubmit={runPoliticiansOpinionsSearch} className="politicians-opinions-form">
+            <label>
+              <strong>Pytanie</strong>
+              <input
+                type="text"
+                value={opinionQuestion}
+                onChange={(e) => setOpinionQuestion(e.target.value)}
+                placeholder="Np. Co polityk sądzi o podatkach?"
+                className="deputy-search-input"
+              />
+            </label>
+
+            <div className="search-and-filter-row">
+              <input
+                type="text"
+                placeholder="Szukaj posła po nazwisku, klubie, okręgu..."
+                value={opinionSearchQuery}
+                onChange={(e) => setOpinionSearchQuery(e.target.value)}
+                className="deputy-search-input"
+              />
+              <select
+                value={opinionSelectedClubFilter}
+                onChange={(e) => setOpinionSelectedClubFilter(e.target.value)}
+                className="deputy-club-select"
+              >
+                <option value="ALL">Wszystkie kluby i koła ({deputies.length})</option>
+                {uniqueClubs.map(({ club, displayName }) => (
+                  <option key={`op-club-${club}`} value={club}>
+                    {club} — {displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="opinion-deputies-list">
+              {filteredOpinionDeputies.map((deputy) => (
+                <label key={`op-${deputy.id}`} className="opinion-deputy-item">
+                  <input
+                    type="checkbox"
+                    checked={opinionSelectedDeputyIds.includes(deputy.id)}
+                    onChange={() => toggleOpinionDeputySelection(deputy.id)}
+                  />
+                  <span>
+                    {deputy.first_last_name} ({deputy.club})
+                  </span>
+                </label>
+              ))}
+              {!deputiesLoading && filteredOpinionDeputies.length === 0 && (
+                <p className="muted">Brak posłów dla podanego filtra.</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={
+                opinionsLoading ||
+                opinionQuestion.trim().length < 5 ||
+                opinionSelectedDeputyIds.length === 0
+              }
+              className="primary"
+            >
+              {opinionsLoading ? "Szukam..." : "Szukaj wypowiedzi"}
+            </button>
+          </form>
+
+          {opinionsError && (
+            <div className="error-card" style={{ marginTop: "16px" }}>
+              <strong>Błąd:</strong> {opinionsError}
+            </div>
+          )}
+
+          {opinionsResult && !opinionsLoading && (
+            <div className="tavily-sources-container" style={{ marginTop: "16px" }}>
+              <h3>
+                Znaleziono {opinionsResult.findings_count} wyników dla: „{opinionsResult.question}”
+              </h3>
+              {opinionsResult.findings.length === 0 ? (
+                <p className="muted">Brak znalezionych materiałów dla wybranych posłów.</p>
+              ) : (
+                <div className="tavily-sources-list">
+                  {opinionsResult.findings.map((finding, index) => (
+                    <article key={`${finding.url}-${finding.deputy_id}-${index}`} className="tavily-source-card">
+                      <div className="source-card-header">
+                        <a
+                          href={finding.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="source-title-link"
+                        >
+                          {finding.title || finding.url}
+                        </a>
+                        <span className="source-score">{finding.deputy_name}</span>
+                      </div>
+                      <p className="source-snippet">{finding.snippet}</p>
+                      <div className="source-domain">
+                        <span>{finding.deputy_club}</span>
+                        {finding.published_at && (
+                          <span>
+                            {" "}
+                            •{" "}
+                            {new Date(finding.published_at).toLocaleDateString("pl-PL")}
+                          </span>
+                        )}
+                        {finding.score !== null && finding.score !== undefined && (
+                          <span> • trafność: {finding.score.toFixed(2)}</span>
+                        )}
+                        <div>
+                          <a href={finding.url} target="_blank" rel="noreferrer">
+                            {finding.url}
+                          </a>
+                        </div>
+                      </div>
                     </article>
                   ))}
                 </div>

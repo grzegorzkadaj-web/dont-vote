@@ -27,7 +27,10 @@ from src.backend.schemas import (
     DeputyPublicInfo,
     FeedbackRequest,
     PartyOverview,
+    PoliticianOpinionFinding,
     PoliticianPosition,
+    PoliticiansOpinionRequest,
+    PoliticiansOpinionResponse,
     VotingsSearchRequest,
     VotingsSearchResponse,
 )
@@ -182,7 +185,9 @@ def get_deputy_dossier(deputy_id: int) -> DeputyDossierResponse:
     voting_svc = get_sejm_voting_service()
     deputy_dict = voting_svc.get_deputy_details(deputy_id)
     if not deputy_dict or not deputy_dict.get("id"):
-        raise HTTPException(status_code=404, detail="Nie znaleziono posła o podanym ID.")
+        raise HTTPException(
+            status_code=404, detail="Nie znaleziono posła o podanym ID."
+        )
 
     try:
         activity_stats_dict = voting_svc.get_deputy_activity_stats(deputy_id)
@@ -221,7 +226,9 @@ def list_politician_positions() -> list[PoliticianPosition]:
         positions = get_all_politician_positions()
         if not positions:
             # Auto-populate first time so the frontend tab is not empty on fresh deployments.
-            from calculate_politician_positions import calculate_and_store_all_politicians
+            from calculate_politician_positions import (
+                calculate_and_store_all_politicians,
+            )
 
             calculate_and_store_all_politicians(use_ai=False)
             positions = get_all_politician_positions()
@@ -230,6 +237,52 @@ def list_politician_positions() -> list[PoliticianPosition]:
         raise HTTPException(
             status_code=500,
             detail=f"Błąd pobierania pozycji polityków z bazy danych: {exc}",
+        ) from exc
+
+
+@app.post("/api/politicians/opinions/search", response_model=PoliticiansOpinionResponse)
+def search_politician_opinions(
+    payload: PoliticiansOpinionRequest,
+) -> PoliticiansOpinionResponse:
+    try:
+        deputies = get_sejm_voting_service().get_deputies_list()
+        deputies_by_id = {int(item["id"]): item for item in deputies if item.get("id")}
+        tavily_service = get_tavily_deputy_service()
+
+        findings: list[dict] = []
+        for deputy_id in payload.deputy_ids:
+            deputy = deputies_by_id.get(deputy_id)
+            if deputy is None:
+                continue
+            findings.extend(
+                tavily_service.search_deputy_opinion_findings(
+                    deputy_name=deputy.get("first_last_name", ""),
+                    deputy_id=deputy_id,
+                    deputy_club=deputy.get("club_display_name")
+                    or deputy.get("club", ""),
+                    question=payload.question,
+                    limit=payload.limit_per_deputy,
+                )
+            )
+
+        findings.sort(
+            key=lambda item: (
+                1 if item.get("published_at") else 0,
+                item.get("published_at") or "",
+                float(item.get("score") or 0.0),
+            ),
+            reverse=True,
+        )
+        response_items = [PoliticianOpinionFinding(**item) for item in findings]
+        return PoliticiansOpinionResponse(
+            question=payload.question,
+            findings_count=len(response_items),
+            findings=response_items,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Błąd wyszukiwania opinii polityków: {exc}",
         ) from exc
 
 

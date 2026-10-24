@@ -95,7 +95,9 @@ class ContactSubmissionRequest(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     category: str = Field(default="pytanie", min_length=2, max_length=64)
     message: str = Field(min_length=10, max_length=5000)
-    rodo_consent: bool = Field(..., description="Zgoda na przetwarzanie danych osobowych (RODO)")
+    rodo_consent: bool = Field(
+        ..., description="Zgoda na przetwarzanie danych osobowych (RODO)"
+    )
     turnstile_token: str | None = None
     honeypot: str | None = None
 
@@ -154,6 +156,29 @@ class DeputyDossierResponse(BaseModel):
     public_info: DeputyPublicInfo
 
 
+class PoliticiansOpinionRequest(BaseModel):
+    question: str = Field(min_length=5, max_length=500)
+    deputy_ids: list[int] = Field(min_length=1, max_length=25)
+    limit_per_deputy: int = Field(default=3, ge=1, le=5)
+
+
+class PoliticianOpinionFinding(BaseModel):
+    deputy_id: int
+    deputy_name: str
+    deputy_club: str
+    title: str
+    url: str
+    snippet: str
+    published_at: str | None = None
+    score: float | None = None
+
+
+class PoliticiansOpinionResponse(BaseModel):
+    question: str
+    findings_count: int
+    findings: list[PoliticianOpinionFinding]
+
+
 class PoliticianVotingDetail(BaseModel):
     sitting: int
     voting_number: int
@@ -180,5 +205,3 @@ class PoliticianPosition(BaseModel):
     worldview_description: str
     voting_details: list[PoliticianVotingDetail] = Field(default_factory=list)
     calculated_at: str
-
-
