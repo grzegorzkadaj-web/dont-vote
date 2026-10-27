@@ -193,6 +193,31 @@ const buildApiUrl = (path: string): string =>
 
 const clampAxisValue = (value: number): number => Math.max(-1, Math.min(1, value));
 
+const readErrorDetail = async (
+  response: Response,
+  fallbackMessage: string
+): Promise<string> => {
+  try {
+    const data = (await response.json()) as { detail?: unknown };
+    if (typeof data.detail === "string" && data.detail.trim()) {
+      return data.detail.trim();
+    }
+  } catch {
+    // ignore JSON parse errors and fallback to text/default message
+  }
+
+  try {
+    const text = await response.text();
+    if (text.trim()) {
+      return text.trim();
+    }
+  } catch {
+    // ignore body read errors
+  }
+
+  return fallbackMessage;
+};
+
 const pollQuestions: PollQuestion[] = [
   {
     id: "social-spending",
@@ -433,8 +458,11 @@ export default function HomePage() {
       });
 
       if (!response.ok) {
-        const details = await response.text();
-        throw new Error(`Zapytanie nie powiodło się: ${details}`);
+        const details = await readErrorDetail(
+          response,
+          "Zapytanie nie powiodło się."
+        );
+        throw new Error(details);
       }
 
       const data = (await response.json()) as AskResponse;
@@ -490,8 +518,8 @@ export default function HomePage() {
       });
 
       if (!response.ok) {
-        const details = await response.text();
-        throw new Error(`Błąd wyszukiwania: ${details}`);
+        const details = await readErrorDetail(response, "Błąd wyszukiwania.");
+        throw new Error(details);
       }
 
       const data = (await response.json()) as VotingsSearchResponse;
@@ -563,8 +591,11 @@ export default function HomePage() {
         })
       });
       if (!response.ok) {
-        const details = await response.text();
-        throw new Error(`Błąd wyszukiwania opinii: ${details}`);
+        const details = await readErrorDetail(
+          response,
+          "Błąd wyszukiwania opinii."
+        );
+        throw new Error(details);
       }
       const data = (await response.json()) as PoliticiansOpinionResponse;
       setOpinionsResult(data);

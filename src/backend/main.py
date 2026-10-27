@@ -35,6 +35,9 @@ from src.backend.schemas import (
     VotingsSearchResponse,
 )
 from src.backend.security import (
+    QuerySafetyError,
+    QueryScope,
+    enforce_query_safety,
     anonymize_ip,
     contact_rate_limiter,
     verify_cloudflare_turnstile,
@@ -118,7 +121,10 @@ def get_parties() -> list[PartyOverview]:
 @app.post("/api/ask", response_model=AskResponse)
 def ask_question(payload: AskRequest) -> AskResponse:
     try:
+        enforce_query_safety(payload.question, QueryScope.PARTY_PROGRAMMES)
         return get_rag_service().ask(question=payload.question, parties=payload.parties)
+    except QuerySafetyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -143,12 +149,15 @@ def submit_feedback(payload: FeedbackRequest) -> dict[str, str]:
 @app.post("/api/votings/search", response_model=VotingsSearchResponse)
 def search_votings(payload: VotingsSearchRequest) -> VotingsSearchResponse:
     try:
+        enforce_query_safety(payload.query, QueryScope.VOTINGS)
         acts = get_sejm_voting_service().search_acts_and_votes(
             query=payload.query, limit=payload.limit
         )
         return VotingsSearchResponse(
             query=payload.query, results_count=len(acts), acts=acts
         )
+    except QuerySafetyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=500, detail=f"Błąd wyszukiwania głosowań: {exc}"
@@ -161,8 +170,11 @@ def search_votings_get(
     limit: int = Query(8, ge=1, le=20),
 ) -> VotingsSearchResponse:
     try:
+        enforce_query_safety(q, QueryScope.VOTINGS)
         acts = get_sejm_voting_service().search_acts_and_votes(query=q, limit=limit)
         return VotingsSearchResponse(query=q, results_count=len(acts), acts=acts)
+    except QuerySafetyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=500, detail=f"Błąd wyszukiwania głosowań: {exc}"
@@ -245,6 +257,7 @@ def search_politician_opinions(
     payload: PoliticiansOpinionRequest,
 ) -> PoliticiansOpinionResponse:
     try:
+        enforce_query_safety(payload.question, QueryScope.POLITICIANS_OPINIONS)
         deputies = get_sejm_voting_service().get_deputies_list()
         deputies_by_id = {int(item["id"]): item for item in deputies if item.get("id")}
         tavily_service = get_tavily_deputy_service()
@@ -279,6 +292,8 @@ def search_politician_opinions(
             findings_count=len(response_items),
             findings=response_items,
         )
+    except QuerySafetyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=500,
